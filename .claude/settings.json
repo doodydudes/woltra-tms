@@ -48,7 +48,9 @@
       "Bash(git config *)",
       "Bash(git commit -m ' *)",
       "Bash(git remote *)",
-      "Bash(git branch *)"
+      "Bash(git branch *)",
+      "PowerShell(Invoke-RestMethod -Uri \"http://localhost:5000/api/health\" -Method Get)",
+      "PowerShell($p = Get-NetTCPConnection -LocalPort 5000 -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess; if \\($p\\) { Stop-Process -Id $p -Force; Write-Output \"Killed PID $p\" } else { Write-Output \"Port 5000 is free\" })"
     ]
   }
 }

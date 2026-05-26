@@ -4,8 +4,8 @@
   "private": true,
   "scripts": {
     "start": "concurrently \"npm run backend\" \"npm run frontend\"",
-    "backend": "cd trucking-management/backend && node server.js",
-    "frontend": "cd trucking-management/frontend && npm run dev"
+    "backend": "cd woltra/backend && node server.js",
+    "frontend": "cd woltra/frontend && npm run dev"
   },
   "devDependencies": {
     "concurrently": "^8.2.2"
