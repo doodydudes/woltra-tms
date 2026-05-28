@@ -1,0 +1,210 @@
+require('dotenv').config();
+const express = require('express');
+const cors = require('cors');
+const helmet = require('helmet');
+const morgan = require('morgan');
+const rateLimit = require('express-rate-limit');
+const path = require('path');
+const bcrypt = require('bcryptjs');
+
+const authRoutes = require('./src/routes/authRoutes');
+const userRoutes = require('./src/routes/userRoutes');
+const driverRoutes = require('./src/routes/driverRoutes');
+const deliveryRoutes = require('./src/routes/deliveryRoutes');
+const vehicleRoutes = require('./src/routes/vehicleRoutes');
+const reportRoutes = require('./src/routes/reportRoutes');
+const notificationRoutes = require('./src/routes/notificationRoutes');
+const dashboardRoutes = require('./src/routes/dashboardRoutes');
+const tripRateRoutes = require('./src/routes/tripRateRoutes');
+const vehicleReportRoutes = require('./src/routes/vehicleReportRoutes');
+
+const app = express();
+
+// Run DB migrations for OAuth columns
+const pool = require('./src/config/database');
+
+// PostgreSQL: ADD COLUMN IF NOT EXISTS is idempotent — no need to query info_schema
+async function addColIfMissing(table, column, definition) {
+  try {
+    await pool.query(`ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS ${column} ${definition}`);
+  } catch (_) {}
+}
+
+(async () => {
+  // Make password nullable for OAuth accounts (already nullable in new schema, safe to ignore)
+  try { await pool.query(`ALTER TABLE users ALTER COLUMN password DROP NOT NULL`); } catch (_) {}
+
+  // Ensure all columns exist (idempotent on PostgreSQL)
+  await addColIfMissing('users', 'oauth_provider', 'VARCHAR(20)');
+  await addColIfMissing('users', 'oauth_id', 'VARCHAR(100)');
+  await addColIfMissing('users', 'company_name', 'VARCHAR(100)');
+  await addColIfMissing('users', 'driver_code', 'VARCHAR(12)');
+  await addColIfMissing('vehicles', 'assigned_driver_id', 'INTEGER');
+  await addColIfMissing('vehicles', 'claim_code', 'VARCHAR(20)');
+  await addColIfMissing('deliveries', 'replacement_driver_name', 'VARCHAR(255)');
+  await addColIfMissing('deliveries', 'salary_approved', 'BOOLEAN DEFAULT FALSE');
+  await addColIfMissing('deliveries', 'salary_approved_at', 'TIMESTAMP');
+  await addColIfMissing('deliveries', 'salary_approved_by', 'INTEGER');
+  await addColIfMissing('trip_rates', 'driver_rate', 'DECIMAL(10,2)');
+  await addColIfMissing('trip_rates', 'helper_rate', 'DECIMAL(10,2)');
+  // wheel_count: 0 = all types, 4/6/8/10/12/14/16 = specific truck type
+  await addColIfMissing('trip_rates', 'wheel_count', 'INTEGER NOT NULL DEFAULT 0');
+  // Replace old (province,city) unique with (province,city,wheel_count)
+  try { await pool.query(`ALTER TABLE trip_rates DROP CONSTRAINT IF EXISTS trip_rates_province_city_key`); } catch (_) {}
+  try { await pool.query(`ALTER TABLE trip_rates ADD CONSTRAINT trip_rates_province_city_wheel_key UNIQUE (province, city, wheel_count)`); } catch (_) {}
+  await addColIfMissing('vehicles', 'wheel_count', 'INTEGER');
+
+  // Make driver columns nullable for self-registered drivers
+  try { await pool.query('ALTER TABLE drivers ALTER COLUMN phone DROP NOT NULL'); } catch (_) {}
+  try { await pool.query('ALTER TABLE drivers ALTER COLUMN license_number DROP NOT NULL'); } catch (_) {}
+  try { await pool.query('ALTER TABLE drivers ALTER COLUMN license_expiry DROP NOT NULL'); } catch (_) {}
+  try { await pool.query('ALTER TABLE drivers ALTER COLUMN hire_date DROP NOT NULL'); } catch (_) {}
+
+  await addColIfMissing('drivers', 'address', 'VARCHAR(255)');
+  await addColIfMissing('drivers', 'emergency_contact', 'VARCHAR(100)');
+  await addColIfMissing('drivers', 'emergency_phone', 'VARCHAR(30)');
+
+  // Vehicle reports table (schema.sql handles creation; these are safety adds)
+  await addColIfMissing('vehicle_reports', 'scheduled_date', 'DATE');
+  await addColIfMissing('vehicle_reports', 'resolved_at', 'TIMESTAMP');
+  await addColIfMissing('vehicle_reports', 'progress_photos', 'JSONB');
+  await addColIfMissing('vehicle_reports', 'driver_progress_notes', 'TEXT');
+  await addColIfMissing('vehicle_reports', 'driver_progress_at', 'TIMESTAMP');
+
+  // Seed demo accounts if they don't exist
+  const demoPassword = await bcrypt.hash('Admin123!', 10);
+
+  const [[{ ownerexists }]] = await pool.execute(
+    'SELECT COUNT(*)::int AS ownerexists FROM users WHERE email = $1', ['owner@trucking.com']
+  );
+  if (!ownerexists) {
+    await pool.execute(
+      `INSERT INTO users (name, email, password, role, is_active) VALUES (?, ?, ?, 'owner', TRUE)`,
+      ['Demo Owner', 'owner@trucking.com', demoPassword]
+    );
+    console.log('Demo owner account created: owner@trucking.com / Admin123!');
+  }
+
+  const [[{ driverexists }]] = await pool.execute(
+    'SELECT COUNT(*)::int AS driverexists FROM users WHERE email = $1', ['mike@trucking.com']
+  );
+  let mikeUserId;
+  if (!driverexists) {
+    let driver_code = '';
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    for (let i = 0; i < 8; i++) driver_code += chars[Math.floor(Math.random() * chars.length)];
+    const [res] = await pool.execute(
+      `INSERT INTO users (name, email, password, role, is_active, driver_code) VALUES (?, ?, ?, 'driver', TRUE, ?) RETURNING id`,
+      ['Mike Santos', 'mike@trucking.com', demoPassword, driver_code]
+    );
+    mikeUserId = res.insertId;
+    console.log('Demo driver account created: mike@trucking.com / Admin123!');
+  } else {
+    const [[mikeRow]] = await pool.execute('SELECT id FROM users WHERE email = ?', ['mike@trucking.com']);
+    mikeUserId = mikeRow?.id;
+  }
+
+  if (mikeUserId) {
+    const [[{ driversexists }]] = await pool.execute(
+      'SELECT COUNT(*)::int AS driversexists FROM drivers WHERE user_id = ?', [mikeUserId]
+    );
+    if (!driversexists) {
+      const empId = `DRV-${mikeUserId}`;
+      await pool.execute(
+        `INSERT INTO drivers (user_id, employee_id, name, email, status) VALUES (?, ?, ?, ?, 'active')`,
+        [mikeUserId, empId, 'Mike Santos', 'mike@trucking.com']
+      );
+      console.log('Demo driver record created for mike@trucking.com');
+    }
+  }
+})().catch(err => console.warn('Startup migration warning:', err.message));
+
+// Security middleware
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: 'cross-origin' }
+}));
+
+// CORS
+const allowedOrigins = [
+  process.env.FRONTEND_URL,
+  'http://localhost:5173',
+  'http://localhost:5174',
+  'http://localhost:4173',
+].filter(Boolean);
+
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    // Allow any localhost/127.0.0.1 port in development
+    if (process.env.NODE_ENV !== 'production' &&
+        /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) {
+      return callback(null, true);
+    }
+    callback(new Error('Not allowed by CORS'));
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
+
+// Rate limiting — high limit for a small private system
+const limiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 500,
+  message: { error: 'Too many requests, please try again later.' }
+});
+app.use('/api/', limiter);
+
+// Body parsing
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Logging
+if (process.env.NODE_ENV !== 'test') {
+  app.use(morgan('dev'));
+}
+
+// Static files for uploads
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+// API Routes
+app.use('/api/auth', authRoutes);
+app.use('/api/users', userRoutes);
+app.use('/api/drivers', driverRoutes);
+app.use('/api/deliveries', deliveryRoutes);
+app.use('/api/vehicles', vehicleRoutes);
+app.use('/api/reports', reportRoutes);
+app.use('/api/notifications', notificationRoutes);
+app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/salary', tripRateRoutes);
+app.use('/api/vehicle-reports', vehicleReportRoutes);
+
+// Health check
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'OK', timestamp: new Date().toISOString(), version: '1.0.0' });
+});
+
+// 404 handler
+app.use((req, res) => {
+  res.status(404).json({ error: 'Route not found' });
+});
+
+// Global error handler
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  if (err.code === 'LIMIT_FILE_SIZE') {
+    return res.status(400).json({ error: 'File size too large. Maximum 5MB allowed.' });
+  }
+  res.status(err.status || 500).json({
+    error: process.env.NODE_ENV === 'production' ? 'Internal server error' : err.message
+  });
+});
+
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, () => {
+  console.log(`Trucking Management API running on port ${PORT}`);
+  console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+});
+
+module.exports = app;

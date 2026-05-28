@@ -1,0 +1,28 @@
+<svg width="180" height="180" viewBox="0 0 180 180" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <rect width="180" height="180" rx="38" fill="#16181D"/>
+
+  <!-- Cargo box -->
+  <rect x="18" y="58" width="90" height="68" rx="7" fill="#FACC15"/>
+
+  <!-- Cab body -->
+  <path d="M108 74 L108 126 L162 126 L162 102 L142 74 Z" fill="#FACC15"/>
+
+  <!-- Windshield -->
+  <path d="M115 80 L115 97 L156 97 L156 80 Z" fill="#16181D" opacity="0.75"/>
+
+  <!-- Chassis -->
+  <rect x="14" y="124" width="152" height="9" rx="4.5" fill="#FACC15"/>
+
+  <!-- Rear wheel outer -->
+  <circle cx="50" cy="142" r="17" fill="#FACC15"/>
+  <!-- Rear wheel inner -->
+  <circle cx="50" cy="142" r="9" fill="#16181D"/>
+  <circle cx="50" cy="142" r="4" fill="#FACC15"/>
+
+  <!-- Front wheel outer -->
+  <circle cx="138" cy="142" r="17" fill="#FACC15"/>
+  <!-- Front wheel inner -->
+  <circle cx="138" cy="142" r="9" fill="#16181D"/>
+  <circle cx="138" cy="142" r="4" fill="#FACC15"/>
+</svg>
