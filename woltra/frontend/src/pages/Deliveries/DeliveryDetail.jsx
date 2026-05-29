@@ -58,7 +58,7 @@ function PhotoGrid({ photos }) {
         <div key={i}>
           <p style={{ fontSize: '10.5px', color: 'var(--text-3)', marginBottom: 4 }}>{p.label}</p>
           <img
-            src={`http://localhost:5000${p.src}`}
+            src={p.src?.startsWith('http') ? p.src : `${(import.meta.env.VITE_API_URL || 'http://localhost:5000/api').replace('/api', '')}${p.src}`}
             alt={p.label}
             style={{
               width: '100%', height: p.isSignature ? 80 : 120,
@@ -67,7 +67,7 @@ function PhotoGrid({ photos }) {
               background: p.isSignature ? '#fff' : 'var(--bg-card-alt)',
               cursor: 'pointer',
             }}
-            onClick={() => window.open(`http://localhost:5000${p.src}`, '_blank')}
+            onClick={() => window.open(p.src?.startsWith('http') ? p.src : `${(import.meta.env.VITE_API_URL || 'http://localhost:5000/api').replace('/api', '')}${p.src}`, '_blank')}
             onError={e => { e.target.style.display = 'none'; }}
           />
         </div>

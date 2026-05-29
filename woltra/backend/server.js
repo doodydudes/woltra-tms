@@ -31,6 +31,16 @@ async function addColIfMissing(table, column, definition) {
 }
 
 (async () => {
+  // InsForge auth: link public.users to InsForge auth.users via UUID
+  await addColIfMissing('users', 'auth_id', 'UUID');
+  try { await pool.query('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_auth_id ON users(auth_id)'); } catch (_) {}
+
+  // Multi-tenant scoping: owner_id on fleet tables
+  await addColIfMissing('drivers',  'owner_id', 'INTEGER');
+  await addColIfMissing('helpers',  'owner_id', 'INTEGER');
+  await addColIfMissing('vehicles', 'owner_id', 'INTEGER');
+  await addColIfMissing('routes',   'owner_id', 'INTEGER');
+
   // Make password nullable for OAuth accounts (already nullable in new schema, safe to ignore)
   try { await pool.query(`ALTER TABLE users ALTER COLUMN password DROP NOT NULL`); } catch (_) {}
 
@@ -136,9 +146,10 @@ app.use(cors({
   origin: (origin, callback) => {
     if (!origin) return callback(null, true);
     if (allowedOrigins.includes(origin)) return callback(null, true);
+    // Allow any Vercel preview deployment
+    if (/^https:\/\/.*\.vercel\.app$/.test(origin)) return callback(null, true);
     // Allow any localhost/127.0.0.1 port in development
-    if (process.env.NODE_ENV !== 'production' &&
-        /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) {
+    if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) {
       return callback(null, true);
     }
     callback(new Error('Not allowed by CORS'));
@@ -165,8 +176,7 @@ if (process.env.NODE_ENV !== 'test') {
   app.use(morgan('dev'));
 }
 
-// Static files for uploads
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+// Note: file uploads now go to InsForge Storage — no local static serving needed
 
 // API Routes
 app.use('/api/auth', authRoutes);

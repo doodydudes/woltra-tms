@@ -117,7 +117,7 @@ function PhotoGrid({ photos, apiBase }) {
             width: 72, height: 72, borderRadius: 8, overflow: 'hidden',
             border: '1px solid var(--border)', cursor: 'pointer', flexShrink: 0,
           }}>
-            <img src={`${apiBase}${p}`} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+            <img src={p?.startsWith('http') ? p : `${apiBase}${p}`} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }}
               onError={e => { e.target.style.display = 'none'; }} />
           </div>
         ))}
@@ -136,7 +136,7 @@ function PhotoGrid({ photos, apiBase }) {
           }}>
             <X size={18} />
           </button>
-          <img src={`${apiBase}${lightbox}`} alt="" style={{ maxWidth: '90vw', maxHeight: '85vh', borderRadius: 10, objectFit: 'contain' }} />
+          <img src={lightbox?.startsWith('http') ? lightbox : `${apiBase}${lightbox}`} alt="" style={{ maxWidth: '90vw', maxHeight: '85vh', borderRadius: 10, objectFit: 'contain' }} />
         </div>
       )}
     </>

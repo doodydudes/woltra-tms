@@ -1,4 +1,5 @@
 const pool = require('../config/database');
+const { uploadToStorage } = require('../middleware/upload');
 
 const deliveryFields = `
   d.id, d.date, d.gate_pass_number, d.outlet, d.location,
@@ -337,8 +338,8 @@ exports.uploadProof = async (req, res) => {
     if (!existing.length) return res.status(404).json({ error: 'Delivery not found' });
 
     const updates = {};
-    if (req.files?.photo) updates.delivery_photo = `/uploads/photos/${req.files.photo[0].filename}`;
-    if (req.files?.signature) updates.customer_signature = `/uploads/signatures/${req.files.signature[0].filename}`;
+    if (req.files?.photo) updates.delivery_photo = await uploadToStorage(req.files.photo[0]);
+    if (req.files?.signature) updates.customer_signature = await uploadToStorage(req.files.signature[0]);
 
     if (!Object.keys(updates).length) {
       return res.status(400).json({ error: 'No files uploaded' });
@@ -383,8 +384,9 @@ exports.advancePhase = async (req, res) => {
       if (!file) return res.status(400).json({ error: 'Loading photo is required' });
       newStatus = 'in_transit';
       trackingStatus = 'in_transit';
+      const loadingUrl = await uploadToStorage(file);
       updateSql = 'UPDATE deliveries SET loading_photo = ?, status = ?, actual_start_time = NOW(), updated_at = NOW() WHERE id = ?';
-      updateParams = [`/uploads/loading/${file.filename}`, newStatus, id];
+      updateParams = [loadingUrl, newStatus, id];
       trackingNote = 'Loading proof uploaded — goods in transit';
 
     } else if (phase === '2') {
@@ -393,8 +395,9 @@ exports.advancePhase = async (req, res) => {
       if (!arrival_time) return res.status(400).json({ error: 'Arrival time is required' });
       newStatus = 'arrived_unloading';
       trackingStatus = 'arrived_unloading';
+      const unloadingUrl = await uploadToStorage(file);
       updateSql = 'UPDATE deliveries SET unloading_photo = ?, arrival_time = ?, status = ?, updated_at = NOW() WHERE id = ?';
-      updateParams = [`/uploads/unloading/${file.filename}`, arrival_time, newStatus, id];
+      updateParams = [unloadingUrl, arrival_time, newStatus, id];
       trackingNote = `Arrived at location — unloading in progress`;
 
     } else if (phase === '3') {
@@ -404,9 +407,10 @@ exports.advancePhase = async (req, res) => {
       if (!deliveryFile) return res.status(400).json({ error: 'Delivery photo is required' });
       newStatus = null; // no status change
       trackingStatus = 'delivery_proof';
+      const deliveryUrl = await uploadToStorage(deliveryFile);
       const sets   = ['delivery_photo = ?', 'updated_at = NOW()'];
-      const vals   = [`/uploads/delivery/${deliveryFile.filename}`];
-      if (sigFile) { sets.push('customer_signature = ?'); vals.push(`/uploads/signatures/${sigFile.filename}`); }
+      const vals   = [deliveryUrl];
+      if (sigFile) { sets.push('customer_signature = ?'); vals.push(await uploadToStorage(sigFile)); }
       updateSql    = `UPDATE deliveries SET ${sets.join(', ')} WHERE id = ?`;
       updateParams = [...vals, id];
       trackingNote = 'Unloading complete — delivery proof captured';
@@ -414,7 +418,8 @@ exports.advancePhase = async (req, res) => {
     } else if (phase === '4') {
       const files = req.files?.document_photos || [];
       if (!files.length) return res.status(400).json({ error: 'At least one document photo is required' });
-      const docPaths = JSON.stringify(files.map(f => `/uploads/documents/${f.filename}`));
+      const docUrls = await Promise.all(files.map(f => uploadToStorage(f)));
+      const docPaths = JSON.stringify(docUrls);
       newStatus = 'delivered';
       trackingStatus = 'delivered';
       updateSql = 'UPDATE deliveries SET document_photos = ?, status = ?, completed_delivery_time = NOW(), proof_uploaded = TRUE, updated_at = NOW() WHERE id = ?';

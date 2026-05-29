@@ -1,4 +1,5 @@
 const pool = require('../config/database');
+const { uploadToStorage } = require('../middleware/upload');
 
 exports.create = async (req, res) => {
   const { type, title, description, location, vehicle_id } = req.body;
@@ -8,7 +9,7 @@ exports.create = async (req, res) => {
     const [driverRows] = await pool.execute('SELECT id FROM drivers WHERE user_id = ?', [req.user.id]);
     const driver_id = driverRows[0]?.id || null;
 
-    const photos = req.files ? req.files.map(f => `/uploads/vehicle-reports/${f.filename}`) : [];
+    const photos = req.files ? await Promise.all(req.files.map(f => uploadToStorage(f))) : [];
 
     const [result] = await pool.execute(
       `INSERT INTO vehicle_reports (vehicle_id, driver_id, user_id, type, title, description, location, photos)
@@ -148,7 +149,7 @@ exports.submitProgress = async (req, res) => {
       return res.status(400).json({ error: 'Report must be in progress before submitting work photos' });
     }
 
-    const newPhotos = req.files ? req.files.map(f => `/uploads/vehicle-reports/${f.filename}`) : [];
+    const newPhotos = req.files ? await Promise.all(req.files.map(f => uploadToStorage(f))) : [];
     const existing = report.progress_photos ? JSON.parse(report.progress_photos) : [];
     const progress_photos = [...existing, ...newPhotos];
 

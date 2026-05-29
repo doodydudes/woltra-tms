@@ -1,30 +1,25 @@
-const multer = require('multer');
-const path = require('path');
+const multer  = require('multer');
+const path    = require('path');
 const { v4: uuidv4 } = require('uuid');
+const { createAdminClient } = require('@insforge/sdk');
 
-const FIELD_DIRS = {
-  signature:        'uploads/signatures',
-  loading_photo:    'uploads/loading',
-  unloading_photo:  'uploads/unloading',
-  delivery_photo:   'uploads/delivery',
-  document_photos:  'uploads/documents',
-};
-
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, FIELD_DIRS[file.fieldname] || 'uploads/photos');
-  },
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase();
-    cb(null, `${uuidv4()}${ext}`);
-  }
+const insforge = createAdminClient({
+  baseUrl: process.env.INSFORGE_URL,
+  apiKey:  process.env.INSFORGE_API_KEY,
 });
 
+const FIELD_CONFIG = {
+  signature:       { bucket: 'signatures', prefix: 'signatures' },
+  loading_photo:   { bucket: 'photos',     prefix: 'loading'    },
+  unloading_photo: { bucket: 'photos',     prefix: 'unloading'  },
+  delivery_photo:  { bucket: 'photos',     prefix: 'delivery'   },
+  document_photos: { bucket: 'documents',  prefix: 'documents'  },
+  photo:           { bucket: 'photos',     prefix: 'misc'       },
+};
+
 const fileFilter = (req, file, cb) => {
-  const allowedTypes = /jpeg|jpg|png|gif|webp/;
-  const ext = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-  const mime = allowedTypes.test(file.mimetype);
-  if (ext && mime) {
+  const allowed = /jpeg|jpg|png|gif|webp/;
+  if (allowed.test(path.extname(file.originalname).toLowerCase()) && allowed.test(file.mimetype)) {
     cb(null, true);
   } else {
     cb(new Error('Only image files are allowed (jpeg, jpg, png, gif, webp)'));
@@ -32,9 +27,24 @@ const fileFilter = (req, file, cb) => {
 };
 
 const upload = multer({
-  storage,
+  storage: multer.memoryStorage(),
   fileFilter,
-  limits: { fileSize: parseInt(process.env.MAX_FILE_SIZE) || 5 * 1024 * 1024 }
+  limits: { fileSize: parseInt(process.env.MAX_FILE_SIZE) || 5 * 1024 * 1024 },
 });
 
-module.exports = { upload };
+async function uploadToStorage(file) {
+  const cfg    = FIELD_CONFIG[file.fieldname] || { bucket: 'photos', prefix: 'misc' };
+  const ext    = path.extname(file.originalname).toLowerCase() || '.jpg';
+  const key    = `${cfg.prefix}/${uuidv4()}${ext}`;
+
+  const { error } = await insforge.storage.from(cfg.bucket).upload(key, file.buffer, {
+    contentType: file.mimetype,
+  });
+
+  if (error) throw new Error(`Storage upload failed: ${error.message}`);
+
+  const base = process.env.INSFORGE_URL;
+  return `${base}/storage/v1/object/public/${cfg.bucket}/${key}`;
+}
+
+module.exports = { upload, uploadToStorage };
