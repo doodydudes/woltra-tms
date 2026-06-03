@@ -12,8 +12,16 @@ export const login = createAsyncThunk('auth/login', async ({ email, password }, 
     }
     if (!data) return rejectWithValue('Sign in failed');
 
-    const profileRes = await api.get('/auth/profile');
-    return profileRes.data.user;
+    try {
+      const profileRes = await api.get('/auth/profile');
+      return profileRes.data.user;
+    } catch (profileErr) {
+      // InsForge auth succeeded but no app profile yet — route to profile setup
+      if (profileErr.response?.status === 401) {
+        return { needsProfile: true };
+      }
+      throw profileErr;
+    }
   } catch (err) {
     return rejectWithValue(err.response?.data?.error || err.message || 'Login failed');
   }
@@ -47,23 +55,18 @@ export const verifyAndSetupProfile = createAsyncThunk(
   }
 );
 
-// ── OAuth callback — exchange code, fetch or request profile creation ─────────
+// ── OAuth callback — check if profile exists or needs setup ─────────────────────
 export const oauthCallback = createAsyncThunk('auth/oauthCallback', async (_, { rejectWithValue }) => {
   try {
-    const { data, error } = await insforgeAuth.getCurrentUser();
-    if (error || !data?.user) return rejectWithValue('OAuth authentication failed');
-
-    try {
-      const profileRes = await api.get('/auth/profile');
-      return { user: profileRes.data.user, needsProfile: false };
-    } catch (profileErr) {
-      if (profileErr.response?.status === 401) {
-        return { user: null, needsProfile: true, insforgeUser: data.user };
-      }
-      throw profileErr;
+    // Check if user has a profile in our app (JWT must be in localStorage at this point)
+    const profileRes = await api.get('/auth/profile');
+    return { user: profileRes.data.user, needsProfile: false };
+  } catch (profileErr) {
+    if (profileErr.response?.status === 401) {
+      // OAuth succeeded, but user needs to create their app profile
+      return { user: null, needsProfile: true, insforgeUser: null };
     }
-  } catch (err) {
-    return rejectWithValue(err.response?.data?.error || err.message || 'OAuth failed');
+    return rejectWithValue(profileErr.response?.data?.error || 'Profile fetch failed');
   }
 });
 
@@ -107,16 +110,19 @@ const authSlice = createSlice({
     loading: false,
     error: null,
     initialized: false,
+    needsProfile: false,
   },
   reducers: {
     logout: (state) => {
       state.user = null;
       state.error = null;
+      state.needsProfile = false;
       clearToken();
       localStorage.removeItem('woltra_user');
       insforgeAuth.signOut().catch(() => {});
     },
     clearError: (state) => { state.error = null; },
+    clearNeedsProfile: (state) => { state.needsProfile = false; },
   },
   extraReducers: (builder) => {
     const pending = (state) => { state.loading = true; state.error = null; };
@@ -129,7 +135,15 @@ const authSlice = createSlice({
 
     builder
       .addCase(login.pending, pending)
-      .addCase(login.fulfilled, setUser)
+      .addCase(login.fulfilled, (state, action) => {
+        state.loading = false;
+        if (action.payload?.needsProfile) {
+          state.needsProfile = true;
+          return;
+        }
+        state.user = action.payload;
+        localStorage.setItem('woltra_user', JSON.stringify(action.payload));
+      })
       .addCase(login.rejected, rejected)
 
       .addCase(register.pending, pending)
@@ -166,5 +180,5 @@ const authSlice = createSlice({
   },
 });
 
-export const { logout, clearError } = authSlice.actions;
+export const { logout, clearError, clearNeedsProfile } = authSlice.actions;
 export default authSlice.reducer;

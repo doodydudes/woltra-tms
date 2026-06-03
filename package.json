@@ -9,5 +9,8 @@
   },
   "devDependencies": {
     "concurrently": "^8.2.2"
+  },
+  "dependencies": {
+    "flyctl": "^1.2.8"
   }
 }

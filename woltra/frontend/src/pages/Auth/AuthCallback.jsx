@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { Building2, Truck } from 'lucide-react';
 import { oauthCallback, setupOAuthProfile } from '../../features/auth/authSlice';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
+import { auth as insforgeAuth } from '../../services/insforge';
 
 export default function AuthCallback() {
   const dispatch = useDispatch();
@@ -12,12 +13,27 @@ export default function AuthCallback() {
 
   const [step, setStep] = useState('loading'); // loading | setup | error
   const [insforgeUser, setInsforgeUser] = useState(null);
-  const [profileForm, setProfileForm] = useState({ role: 'driver', name: '', company_name: '', phone: '' });
+  const savedRole = localStorage.getItem('woltra_oauth_role') || 'driver';
+  const [profileForm, setProfileForm] = useState({ role: savedRole, name: '', company_name: '', phone: '' });
 
   useEffect(() => {
-    // InsForge SDK auto-exchanges insforge_code in the URL when initialized.
-    // Small delay ensures the SDK has processed it before we call getCurrentUser.
     const timer = setTimeout(async () => {
+      // Extract OAuth code from URL and exchange with backend for JWT token
+      const params = new URLSearchParams(window.location.search);
+      const code = params.get('code');
+
+      if (code) {
+        try {
+          // Exchange Google code with backend for JWT token
+          await insforgeAuth.exchangeOAuthCodeWithBackend(code);
+        } catch (err) {
+          console.error('OAuth exchange failed:', err);
+          setStep('error');
+          return;
+        }
+      }
+
+      // Now proceed with profile setup
       const action = await dispatch(oauthCallback());
       if (action.meta.requestStatus === 'fulfilled') {
         const { user, needsProfile, insforgeUser: ifUser } = action.payload;
@@ -27,16 +43,16 @@ export default function AuthCallback() {
           setInsforgeUser(ifUser);
           setProfileForm(f => ({
             ...f,
-            name: ifUser.user_metadata?.name || ifUser.email?.split('@')[0] || '',
+            name: ifUser.profile?.name || ifUser.name || ifUser.email?.split('@')[0] || '',
           }));
           setStep('setup');
         }
       } else {
         setStep('error');
       }
-    }, 500);
+    }, 1000);
     return () => clearTimeout(timer);
-  }, []);
+  }, [dispatch, navigate]);
 
   const handleSetupProfile = async e => {
     e.preventDefault();
@@ -48,6 +64,7 @@ export default function AuthCallback() {
     };
     const action = await dispatch(setupOAuthProfile(profileData));
     if (action.meta.requestStatus === 'fulfilled') {
+      localStorage.removeItem('woltra_oauth_role');
       navigate('/dashboard', { replace: true });
     }
   };
@@ -90,7 +107,7 @@ export default function AuthCallback() {
                   <input type="text" className="input-field" placeholder="MYFLEET" style={{ textTransform: 'uppercase', fontFamily: 'monospace', fontWeight: 700, letterSpacing: '0.08em' }}
                     value={profileForm.company_name}
                     onChange={e => setProfileForm(f => ({ ...f, company_name: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10) }))}
-                    required maxLength={10} />
+                    required minLength={2} maxLength={10} />
                 </div>
               )}
 

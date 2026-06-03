@@ -1,51 +1,49 @@
-const jwt = require('jsonwebtoken');
 const pool = require('../config/database');
+const authService = require('../services/authService');
 
-// Full auth: verify InsForge JWT + require public.users profile row
+// Verify custom JWT token
 const authenticate = async (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
   if (!token) return res.status(401).json({ error: 'Access token required' });
 
-  try {
-    const decoded = jwt.verify(token, process.env.INSFORGE_JWT_SECRET);
-    if (!decoded.sub) return res.status(401).json({ error: 'Invalid token' });
+  // Verify JWT token
+  const decoded = authService.verifyJWT(token);
+  if (!decoded) return res.status(401).json({ error: 'Invalid token' });
 
+  try {
+    // Get user from database
     const [rows] = await pool.execute(
-      'SELECT id, name, email, role, is_active FROM users WHERE auth_id = ?',
-      [decoded.sub]
+      'SELECT id, name, email, role, is_active FROM users WHERE id = ?',
+      [decoded.user_id]
     );
+
     if (!rows.length || !rows[0].is_active) {
-      return res.status(401).json({ error: 'Profile not found or inactive' });
+      return res.status(401).json({ error: 'User not found or inactive' });
     }
 
     req.user = rows[0];
-    req.authId = decoded.sub;
-    req.authEmail = decoded.email || '';
+    req.userId = decoded.user_id;
+    req.userEmail = decoded.email;
     next();
   } catch (err) {
-    if (err.name === 'TokenExpiredError') {
-      return res.status(401).json({ error: 'Token expired' });
-    }
-    return res.status(401).json({ error: 'Invalid token' });
+    console.error('Auth error:', err);
+    return res.status(500).json({ error: 'Server error' });
   }
 };
 
-// Light auth: verify InsForge JWT only (for profile setup — no DB user required yet)
-const verifyToken = (req, res, next) => {
+// Light auth: verify JWT token only (no DB user required)
+const verifyToken = async (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
   if (!token) return res.status(401).json({ error: 'Access token required' });
 
-  try {
-    const decoded = jwt.verify(token, process.env.INSFORGE_JWT_SECRET);
-    if (!decoded.sub) return res.status(401).json({ error: 'Invalid token' });
-    req.authId = decoded.sub;
-    req.authEmail = decoded.email || '';
-    next();
-  } catch {
-    return res.status(401).json({ error: 'Invalid token' });
-  }
+  const decoded = authService.verifyJWT(token);
+  if (!decoded) return res.status(401).json({ error: 'Invalid token' });
+
+  req.userId = decoded.user_id;
+  req.userEmail = decoded.email;
+  next();
 };
 
 module.exports = { authenticate, verifyToken };

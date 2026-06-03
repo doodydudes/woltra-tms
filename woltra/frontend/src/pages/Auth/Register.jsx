@@ -85,6 +85,7 @@ export default function Register() {
   };
 
   const handleOAuth = provider => {
+    localStorage.setItem('woltra_oauth_role', role);
     insforgeAuth.signInWithOAuth(provider);
   };
 

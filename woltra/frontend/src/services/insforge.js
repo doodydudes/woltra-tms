@@ -25,6 +25,13 @@ function captureToken(data) {
   if (data?.accessToken) setToken(data.accessToken);
 }
 
+// After OAuth, accessToken isn't in getCurrentUser() response —
+// it lives in the SDK's internal tokenManager after the code exchange.
+function captureFromSdk() {
+  const token = insforge.tokenManager?.getAccessToken();
+  if (token) setToken(token);
+}
+
 // ── Auth helpers ─────────────────────────────────────────────────────────────
 export const auth = {
   async signIn(email, password) {
@@ -56,15 +63,35 @@ export const auth = {
   },
 
   async signInWithOAuth(provider) {
-    return insforge.auth.signInWithOAuth({
-      provider,
-      redirectTo: `${window.location.origin}/auth-callback`,
+    // Redirect to Google OAuth, which redirects back to /auth-callback
+    const redirectUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
+      `client_id=${import.meta.env.VITE_GOOGLE_CLIENT_ID}&` +
+      `redirect_uri=${window.location.origin}/auth-callback&` +
+      `response_type=code&` +
+      `scope=openid%20email%20profile`;
+    window.location.href = redirectUrl;
+  },
+
+  async exchangeOAuthCodeWithBackend(code) {
+    // Exchange Google code with backend for JWT token
+    const apiUrl = import.meta.env.VITE_API_URL || 'https://woltra-api-0043bca8-5e26-4f7e-9f3a-c48e4e872065.fly.dev/api';
+    const response = await fetch(`${apiUrl}/auth/google/callback`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code }),
     });
+    if (!response.ok) {
+      throw new Error('OAuth exchange failed');
+    }
+    const { token, user_id } = await response.json();
+    setToken(token);
+    return { token, user_id };
   },
 
   async getCurrentUser() {
     const result = await insforge.auth.getCurrentUser();
     captureToken(result.data);
+    captureFromSdk(); // picks up token stored by OAuth code-exchange
     return result;
   },
 

@@ -8,7 +8,7 @@ function generateDriverCode() {
 }
 
 // POST /auth/setup-profile
-// Called once after InsForge signup to create the app-level user profile.
+// Called after OAuth to update/complete the user profile.
 exports.setupProfile = async (req, res) => {
   const { role: reqRole, company_name, phone, license_number, license_expiry, name } = req.body;
   const role = reqRole === 'owner' ? 'owner' : 'driver';
@@ -21,51 +21,59 @@ exports.setupProfile = async (req, res) => {
   }
 
   try {
+    const userId = req.userId;
+
+    // Check if user already has a profile set up
     const [existing] = await pool.execute(
-      'SELECT id FROM users WHERE auth_id = ?',
-      [req.authId]
+      'SELECT id, role FROM users WHERE id = ?',
+      [userId]
     );
-    if (existing.length) {
-      // Already set up — return existing profile
-      const [found] = await pool.execute(
-        'SELECT id, name, email, role, phone, company_name, driver_code, is_active, created_at FROM users WHERE auth_id = ?',
-        [req.authId]
-      );
-      return res.json({ user: found[0], message: 'Profile already exists' });
+
+    if (!existing.length) {
+      return res.status(404).json({ error: 'User not found' });
     }
 
-    let userId;
+    // Update user with profile info
     if (role === 'owner') {
       const shortName = company_name.trim().toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10);
-      const [result] = await pool.execute(
-        'INSERT INTO users (auth_id, name, email, role, phone, company_name) VALUES (?, ?, ?, ?, ?, ?) RETURNING id',
-        [req.authId, name.trim(), req.authEmail, 'owner', phone || null, shortName]
+      await pool.execute(
+        'UPDATE users SET name = ?, role = ?, phone = ?, company_name = ? WHERE id = ?',
+        [name.trim(), 'owner', phone || null, shortName, userId]
       );
-      userId = result.insertId;
     } else {
-      let driver_code;
-      let codeExists = true;
-      while (codeExists) {
-        driver_code = generateDriverCode();
-        const [[{ cnt }]] = await pool.execute(
-          'SELECT COUNT(*)::int AS cnt FROM users WHERE driver_code = ?',
-          [driver_code]
-        );
-        codeExists = cnt > 0;
-      }
-      const [result] = await pool.execute(
-        'INSERT INTO users (auth_id, name, email, role, phone, driver_code) VALUES (?, ?, ?, ?, ?, ?) RETURNING id',
-        [req.authId, name.trim(), req.authEmail, 'driver', phone || null, driver_code]
+      // For drivers, generate a driver code if needed
+      let driver_code = null;
+      const [driverCheck] = await pool.execute(
+        'SELECT driver_code FROM users WHERE id = ?',
+        [userId]
       );
-      userId = result.insertId;
+      if (driverCheck.length && !driverCheck[0].driver_code) {
+        let codeExists = true;
+        while (codeExists) {
+          driver_code = generateDriverCode();
+          const [codeCheck] = await pool.execute(
+            'SELECT COUNT(*) as cnt FROM users WHERE driver_code = ?',
+            [driver_code]
+          );
+          codeExists = codeCheck[0]?.cnt > 0;
+        }
+      }
 
+      const updateParams = [name.trim(), 'driver', phone || null];
+      if (driver_code) updateParams.push(driver_code);
+      updateParams.push(userId);
+
+      const sql = 'UPDATE users SET name = ?, role = ?, phone = ?' + (driver_code ? ', driver_code = ?' : '') + ' WHERE id = ?';
+      await pool.execute(sql, updateParams);
+
+      // Create/update driver record
       const empId = `DRV-${userId}`;
       try {
         await pool.execute(
           `INSERT INTO drivers (user_id, employee_id, name, phone, email, license_number, license_expiry, status)
            VALUES (?, ?, ?, ?, ?, ?, ?, 'active')
            ON CONFLICT (employee_id) DO UPDATE SET name = EXCLUDED.name`,
-          [userId, empId, name.trim(), phone || null, req.authEmail,
+          [userId, empId, name.trim(), phone || null, req.userEmail,
            license_number || null, license_expiry || null]
         );
       } catch (driverErr) {
@@ -73,11 +81,11 @@ exports.setupProfile = async (req, res) => {
       }
     }
 
-    const [newUser] = await pool.execute(
+    const [updatedUser] = await pool.execute(
       'SELECT id, name, email, role, phone, company_name, driver_code, is_active, created_at FROM users WHERE id = ?',
       [userId]
     );
-    res.status(201).json({ user: newUser[0], message: 'Profile created' });
+    res.json({ user: updatedUser[0], message: 'Profile updated' });
   } catch (err) {
     console.error('Setup profile error:', err);
     res.status(500).json({ error: 'Server error during profile setup' });
@@ -100,8 +108,8 @@ exports.getProfile = async (req, res) => {
         let codeExists = true;
         while (codeExists) {
           driver_code = generateDriverCode();
-          const [[{ cnt }]] = await pool.execute('SELECT COUNT(*)::int AS cnt FROM users WHERE driver_code = ?', [driver_code]);
-          codeExists = cnt > 0;
+          const [rows] = await pool.execute('SELECT COUNT(*) as cnt FROM users WHERE driver_code = ?', [driver_code]);
+          codeExists = rows[0]?.cnt > 0;
         }
         await pool.execute('UPDATE users SET driver_code = ? WHERE id = ?', [driver_code, user.id]);
         user.driver_code = driver_code;

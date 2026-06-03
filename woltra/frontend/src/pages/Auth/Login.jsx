@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate, Link } from 'react-router-dom';
 import { Truck, Eye, EyeOff, Sun, Moon, LogIn, Building2, Mail, Lock, PackageCheck, Users, BarChart3 } from 'lucide-react';
-import { login, clearError } from '../../features/auth/authSlice';
+import { login, clearError, clearNeedsProfile } from '../../features/auth/authSlice';
 import { auth as insforgeAuth } from '../../services/insforge';
 import { useTheme } from '../../contexts/ThemeContext';
 
@@ -25,13 +25,23 @@ export default function Login() {
   const [errorKey, setErrorKey]     = useState(0);
   const dispatch   = useDispatch();
   const navigate   = useNavigate();
-  const { loading, error, user } = useSelector(s => s.auth);
+  const { loading, error, user, needsProfile } = useSelector(s => s.auth);
   const { darkMode, toggleDarkMode } = useTheme();
 
   useEffect(() => {
     if (user) navigate('/dashboard');
+  }, [user, navigate]);
+
+  useEffect(() => {
+    if (needsProfile) {
+      dispatch(clearNeedsProfile());
+      navigate('/auth-callback');
+    }
+  }, [needsProfile, navigate, dispatch]);
+
+  useEffect(() => {
     return () => dispatch(clearError());
-  }, [user, navigate, dispatch]);
+  }, [dispatch]);
 
   const switchMode = m => { setMode(m); setForm({ email: '', password: '' }); dispatch(clearError()); setRoleError(null); };
 
@@ -55,6 +65,7 @@ export default function Login() {
   };
 
   const handleOAuth = (provider) => {
+    localStorage.setItem('woltra_oauth_role', mode);
     insforgeAuth.signInWithOAuth(provider);
   };
 
