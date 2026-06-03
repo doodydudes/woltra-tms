@@ -4,7 +4,6 @@ import { useDispatch, useSelector } from 'react-redux';
 import { fetchNotifications } from '../../features/notifications/notificationSlice';
 import BottomNav from './BottomNav';
 import Sidebar from './Sidebar';
-import TopBar from './TopBar';
 
 export default function Layout() {
   const [isDesktop, setIsDesktop] = useState(() => window.innerWidth >= 1024);
@@ -33,7 +32,6 @@ export default function Layout() {
         flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0,
         marginLeft: sidebarWidth,
       }}>
-        {isDesktop && <TopBar />}
         <main style={{
           flex: 1, overflowY: 'auto',
           padding: isDesktop ? '1.5rem 2rem' : '1rem',
