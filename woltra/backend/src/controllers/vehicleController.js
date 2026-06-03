@@ -35,6 +35,10 @@ exports.getAll = async (req, res) => {
       const driverId = driverRows[0]?.id || 0;
       where += ' AND assigned_driver_id = ?';
       params.push(driverId);
+    } else {
+      // Multi-tenant: an owner only sees vehicles in their own fleet
+      where += ' AND owner_id = ?';
+      params.push(req.user.id);
     }
 
     const [[{ total }]] = await pool.execute(`SELECT COUNT(*) as total FROM vehicles ${where}`, params);
@@ -104,9 +108,9 @@ exports.create = async (req, res) => {
     const claimCode = await generateClaimCode(req.user.id);
 
     const [result] = await pool.execute(
-      `INSERT INTO vehicles (truck_id, plate_number, make, model, year, capacity, capacity_unit, fuel_type, wheel_count, notes, assigned_driver_id, claim_code)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
-      [truck_id, plate_number, make || null, model || null, year || null,
+      `INSERT INTO vehicles (owner_id, truck_id, plate_number, make, model, year, capacity, capacity_unit, fuel_type, wheel_count, notes, assigned_driver_id, claim_code)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+      [req.user.id, truck_id, plate_number, make || null, model || null, year || null,
        capacity || null, capacity_unit || 'boxes', fuel_type || 'diesel',
        wheel_count ? parseInt(wheel_count) : null, notes || null,
        assigned_driver_id || null, claimCode]

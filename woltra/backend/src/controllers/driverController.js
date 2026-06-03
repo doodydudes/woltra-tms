@@ -5,8 +5,9 @@ exports.getAll = async (req, res) => {
     const { page = 1, limit = 10, search = '', status = '' } = req.query;
     const offset = (parseInt(page) - 1) * parseInt(limit);
 
-    let where = 'WHERE 1=1';
-    const params = [];
+    // Multi-tenant: an owner only sees drivers they have claimed (owner_id = their id)
+    let where = 'WHERE d.owner_id = ?';
+    const params = [req.user.id];
 
     if (search) {
       where += ' AND (d.name LIKE ? OR d.employee_id LIKE ? OR d.phone LIKE ? OR d.license_number LIKE ?)';
@@ -47,8 +48,8 @@ exports.getById = async (req, res) => {
   try {
     const [rows] = await pool.execute(
       `SELECT d.*, u.email as user_email FROM drivers d
-       LEFT JOIN users u ON d.user_id = u.id WHERE d.id = ?`,
-      [req.params.id]
+       LEFT JOIN users u ON d.user_id = u.id WHERE d.id = ? AND d.owner_id = ?`,
+      [req.params.id, req.user.id]
     );
     if (!rows.length) return res.status(404).json({ error: 'Driver not found' });
 
@@ -126,11 +127,15 @@ exports.create = async (req, res) => {
     if (empCheck.length) return res.status(409).json({ error: 'Employee ID already in use' });
 
     // Update the driver record that was created at registration
-    const [existing] = await pool.execute('SELECT id FROM drivers WHERE user_id = ?', [userId]);
+    const [existing] = await pool.execute('SELECT id, owner_id FROM drivers WHERE user_id = ?', [userId]);
     if (existing.length) {
+      // Reject if this driver is already claimed by a different owner
+      if (existing[0].owner_id && existing[0].owner_id !== req.user.id) {
+        return res.status(409).json({ error: 'This driver is already part of another fleet' });
+      }
       await pool.execute(
-        'UPDATE drivers SET employee_id = ?, hire_date = ?, notes = ?, updated_at = NOW() WHERE user_id = ?',
-        [employee_id, hire_date || null, notes || null, userId]
+        'UPDATE drivers SET employee_id = ?, hire_date = ?, notes = ?, owner_id = ?, updated_at = NOW() WHERE user_id = ?',
+        [employee_id, hire_date || null, notes || null, req.user.id, userId]
       );
       const [updated] = await pool.execute('SELECT * FROM drivers WHERE user_id = ?', [userId]);
       return res.json({ driver: updated[0], message: 'Driver added to fleet' });
@@ -140,9 +145,9 @@ exports.create = async (req, res) => {
     const [userInfo] = await pool.execute('SELECT name, email, phone FROM users WHERE id = ?', [userId]);
     const u = userInfo[0];
     const [result] = await pool.execute(
-      `INSERT INTO drivers (user_id, employee_id, name, phone, email, hire_date, notes, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, 'active') RETURNING id`,
-      [userId, employee_id, u.name, u.phone || null, u.email, hire_date || null, notes || null]
+      `INSERT INTO drivers (user_id, owner_id, employee_id, name, phone, email, hire_date, notes, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active') RETURNING id`,
+      [userId, req.user.id, employee_id, u.name, u.phone || null, u.email, hire_date || null, notes || null]
     );
     const [newDriver] = await pool.execute('SELECT * FROM drivers WHERE id = ?', [result.insertId]);
     res.status(201).json({ driver: newDriver[0], message: 'Driver added to fleet' });
@@ -157,7 +162,7 @@ exports.update = async (req, res) => {
   const { name, license_number, license_expiry, phone, email, address, hire_date, status, emergency_contact, emergency_phone, notes } = req.body;
 
   try {
-    const [existing] = await pool.execute('SELECT * FROM drivers WHERE id = ?', [id]);
+    const [existing] = await pool.execute('SELECT * FROM drivers WHERE id = ? AND owner_id = ?', [id, req.user.id]);
     if (!existing.length) return res.status(404).json({ error: 'Driver not found' });
 
     await pool.execute(
@@ -186,9 +191,9 @@ exports.update = async (req, res) => {
 
 exports.delete = async (req, res) => {
   try {
-    const [existing] = await pool.execute('SELECT id FROM drivers WHERE id = ?', [req.params.id]);
+    const [existing] = await pool.execute('SELECT id FROM drivers WHERE id = ? AND owner_id = ?', [req.params.id, req.user.id]);
     if (!existing.length) return res.status(404).json({ error: 'Driver not found' });
-    await pool.execute('DELETE FROM drivers WHERE id = ?', [req.params.id]);
+    await pool.execute('DELETE FROM drivers WHERE id = ? AND owner_id = ?', [req.params.id, req.user.id]);
     res.json({ message: 'Driver deleted successfully' });
   } catch (err) {
     res.status(500).json({ error: 'Failed to delete driver' });

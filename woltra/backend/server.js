@@ -99,6 +99,12 @@ async function addColIfMissing(table, column, definition) {
   await addColIfMissing('vehicles', 'last_maintenance_date', 'DATE');
   await addColIfMissing('vehicles', 'next_maintenance_date', 'DATE');
   await addColIfMissing('vehicles', 'notes', 'TEXT');
+  await addColIfMissing('vehicles', 'make', 'VARCHAR(100)');
+  await addColIfMissing('vehicles', 'model', 'VARCHAR(100)');
+  await addColIfMissing('vehicles', 'year', 'INTEGER');
+  await addColIfMissing('vehicles', 'capacity', 'DECIMAL(10,2)');
+  await addColIfMissing('vehicles', 'capacity_unit', "VARCHAR(20) DEFAULT 'boxes'");
+  await addColIfMissing('vehicles', 'fuel_type', "VARCHAR(20) DEFAULT 'diesel'");
 
   // ── Tables the controllers query but the base schema never created ──────────
   const createTable = async (sql) => { try { await pool.query(sql); } catch (e) { console.warn('createTable:', e.message); } };

@@ -46,6 +46,10 @@ exports.getAll = async (req, res) => {
       const myDriverId = driverRows[0]?.id || 0;
       where += ' AND d.driver_id = ?';
       params.push(myDriverId);
+    } else {
+      // Multi-tenant: an owner only sees deliveries they created
+      where += ' AND d.assigned_by = ?';
+      params.push(req.user.id);
     }
 
     const [countResult] = await pool.execute(

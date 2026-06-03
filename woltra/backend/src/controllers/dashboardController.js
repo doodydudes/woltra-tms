@@ -71,7 +71,9 @@ exports.getStats = async (req, res) => {
       return res.json({ deliveryStats, todayStats, weeklyData, recentActivity });
     }
 
-    // Owner: full fleet stats
+    // Owner: stats scoped to this owner's own fleet (owner_id / assigned_by)
+    const ownerId = req.user.id;
+
     const [[deliveryStats]] = await pool.execute(`
       SELECT
         COUNT(*)::int                                         AS total,
@@ -81,23 +83,23 @@ exports.getStats = async (req, res) => {
         COUNT(*) FILTER (WHERE status = 'delayed')::int       AS delayed,
         COUNT(*) FILTER (WHERE status = 'cancelled')::int     AS cancelled,
         COUNT(*) FILTER (WHERE status = 'returned')::int      AS returned
-      FROM deliveries
-    `);
+      FROM deliveries WHERE assigned_by = ?
+    `, [ownerId]);
 
     const [[todayStats]] = await pool.execute(`
       SELECT
         COUNT(*)::int                                         AS total_today,
         COUNT(*) FILTER (WHERE status = 'delivered')::int     AS delivered_today,
         COUNT(*) FILTER (WHERE status = 'pending')::int       AS pending_today
-      FROM deliveries WHERE date = ?
-    `, [today]);
+      FROM deliveries WHERE date = ? AND assigned_by = ?
+    `, [today, ownerId]);
 
     const [[driverStats]] = await pool.execute(`
       SELECT
         COUNT(*)::int                                       AS total_drivers,
         COUNT(*) FILTER (WHERE status = 'active')::int     AS active_drivers
-      FROM drivers
-    `);
+      FROM drivers WHERE owner_id = ?
+    `, [ownerId]);
 
     const [[vehicleStats]] = await pool.execute(`
       SELECT
@@ -105,8 +107,8 @@ exports.getStats = async (req, res) => {
         COUNT(*) FILTER (WHERE status = 'available')::int      AS available_vehicles,
         COUNT(*) FILTER (WHERE status = 'in_use')::int         AS in_use_vehicles,
         COUNT(*) FILTER (WHERE status = 'maintenance')::int    AS maintenance_vehicles
-      FROM vehicles
-    `);
+      FROM vehicles WHERE owner_id = ?
+    `, [ownerId]);
 
     const [weeklyData] = await pool.execute(`
       SELECT
@@ -116,10 +118,10 @@ exports.getStats = async (req, res) => {
         COUNT(*) FILTER (WHERE status = 'pending')::int    AS pending,
         COUNT(*) FILTER (WHERE status = 'delayed')::int    AS delayed
       FROM deliveries
-      WHERE date >= ?
+      WHERE date >= ? AND assigned_by = ?
       GROUP BY DATE(date)
       ORDER BY delivery_date ASC
-    `, [weekAgo]);
+    `, [weekAgo, ownerId]);
 
     const [recentActivity] = await pool.execute(`
       SELECT
@@ -128,9 +130,10 @@ exports.getStats = async (req, res) => {
         d.updated_at
       FROM deliveries d
       LEFT JOIN drivers dr ON d.driver_id = dr.id
+      WHERE d.assigned_by = ?
       ORDER BY d.updated_at DESC
       LIMIT 10
-    `);
+    `, [ownerId]);
 
     const [topDrivers] = await pool.execute(`
       SELECT
@@ -140,10 +143,11 @@ exports.getStats = async (req, res) => {
         COUNT(d.id) FILTER (WHERE d.status = 'delayed')::int   AS delayed
       FROM drivers dr
       LEFT JOIN deliveries d ON dr.id = d.driver_id
+      WHERE dr.owner_id = ?
       GROUP BY dr.id
       ORDER BY total_deliveries DESC
       LIMIT 5
-    `);
+    `, [ownerId]);
 
     res.json({
       deliveryStats,
