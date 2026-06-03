@@ -18,7 +18,11 @@ api.interceptors.response.use(
     const isAuthEndpoint = error.config?.url?.startsWith('/auth/');
     if (error.response?.status === 401 && !isAuthEndpoint) {
       clearToken();
-      window.location.href = '/login';
+      // Guard against redirect floods (Chrome "Throttling navigation"):
+      // only redirect once, and not if we're already on the login page.
+      if (window.location.pathname !== '/login') {
+        window.location.replace('/login');
+      }
     }
     return Promise.reject(error);
   }
