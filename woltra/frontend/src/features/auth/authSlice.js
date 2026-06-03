@@ -3,15 +3,29 @@ import { auth as supabaseAuth, getToken, clearToken } from '../../services/supab
 import api from '../../services/api';
 
 // ── Sign in with email/password ───────────────────────────────────────────────
-export const login = createAsyncThunk('auth/login', async ({ email, password }, { rejectWithValue }) => {
+// expectedRole = the tab the user is signing in from ('owner' | 'driver').
+// If the account's real role doesn't match, reject and sign out so they are
+// never actually logged in under the wrong portal.
+export const login = createAsyncThunk('auth/login', async ({ email, password, expectedRole }, { rejectWithValue }) => {
   try {
     await supabaseAuth.signIn(email, password);
 
     try {
       const profileRes = await api.get('/auth/profile');
-      return profileRes.data.user;
+      const user = profileRes.data.user;
+
+      if (expectedRole && user.role && user.role !== expectedRole) {
+        await supabaseAuth.signOut().catch(() => {});
+        return rejectWithValue(
+          user.role === 'owner'
+            ? 'This account is registered as an Owner. Please use the Owner tab.'
+            : 'This account is registered as a Driver. Please use the Driver tab.'
+        );
+      }
+
+      return user;
     } catch (profileErr) {
-      // Supabase auth succeeded but no app profile yet — route to profile setup
+      // A rejected role check above surfaces here only if it threw; re-throw others
       if (profileErr.response?.status === 401) {
         return { needsProfile: true };
       }

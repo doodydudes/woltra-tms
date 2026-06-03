@@ -48,18 +48,10 @@ export default function Login() {
   const handleSubmit = async e => {
     e.preventDefault();
     setRoleError(null);
-    const r = await dispatch(login({ email: form.email, password: form.password }));
-    if (r.meta.requestStatus === 'fulfilled') {
-      const u = r.payload;
-      if (u.role !== mode) {
-        setRoleError(
-          u.role === 'owner'
-            ? 'This is an owner account. Please use the Owner tab.'
-            : 'This is a driver account. Please use the Driver tab.'
-        );
-      } else {
-        navigate('/dashboard');
-      }
+    // expectedRole = active tab; thunk rejects (and signs out) on role mismatch
+    const r = await dispatch(login({ email: form.email, password: form.password, expectedRole: mode }));
+    if (r.meta.requestStatus === 'fulfilled' && r.payload?.role) {
+      navigate('/dashboard');
     }
     setErrorKey(k => k + 1);
   };
