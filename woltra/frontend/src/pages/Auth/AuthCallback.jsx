@@ -4,7 +4,6 @@ import { useNavigate } from 'react-router-dom';
 import { Building2, Truck } from 'lucide-react';
 import { oauthCallback, setupOAuthProfile } from '../../features/auth/authSlice';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
-import { auth as insforgeAuth } from '../../services/insforge';
 
 export default function AuthCallback() {
   const dispatch = useDispatch();
@@ -12,45 +11,25 @@ export default function AuthCallback() {
   const { loading, error } = useSelector(s => s.auth);
 
   const [step, setStep] = useState('loading'); // loading | setup | error
-  const [insforgeUser, setInsforgeUser] = useState(null);
   const savedRole = localStorage.getItem('woltra_oauth_role') || 'driver';
   const [profileForm, setProfileForm] = useState({ role: savedRole, name: '', company_name: '', phone: '' });
 
   useEffect(() => {
+    // Supabase SDK auto-detects the session from the URL on load.
+    // Give it a moment to persist, then check for an app profile.
     const timer = setTimeout(async () => {
-      // Extract OAuth code from URL and exchange with backend for JWT token
-      const params = new URLSearchParams(window.location.search);
-      const code = params.get('code');
-
-      if (code) {
-        try {
-          // Exchange Google code with backend for JWT token
-          await insforgeAuth.exchangeOAuthCodeWithBackend(code);
-        } catch (err) {
-          console.error('OAuth exchange failed:', err);
-          setStep('error');
-          return;
-        }
-      }
-
-      // Now proceed with profile setup
       const action = await dispatch(oauthCallback());
       if (action.meta.requestStatus === 'fulfilled') {
-        const { user, needsProfile, insforgeUser: ifUser } = action.payload;
+        const { user, needsProfile } = action.payload;
         if (user) {
           navigate('/dashboard', { replace: true });
-        } else if (needsProfile && ifUser) {
-          setInsforgeUser(ifUser);
-          setProfileForm(f => ({
-            ...f,
-            name: ifUser.profile?.name || ifUser.name || ifUser.email?.split('@')[0] || '',
-          }));
+        } else if (needsProfile) {
           setStep('setup');
         }
       } else {
         setStep('error');
       }
-    }, 1000);
+    }, 1200);
     return () => clearTimeout(timer);
   }, [dispatch, navigate]);
 

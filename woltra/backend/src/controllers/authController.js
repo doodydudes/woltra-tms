@@ -8,11 +8,15 @@ function generateDriverCode() {
 }
 
 // POST /auth/setup-profile
-// Called after OAuth to update/complete the user profile.
+// Called after Supabase signup/OAuth to create or complete the app user profile.
+// The Supabase session identifies the user by email + auth UUID (req.supabaseId).
 exports.setupProfile = async (req, res) => {
   const { role: reqRole, company_name, phone, license_number, license_expiry, name } = req.body;
   const role = reqRole === 'owner' ? 'owner' : 'driver';
+  const email = req.userEmail;
+  const authId = req.supabaseId;
 
+  if (!email) return res.status(401).json({ error: 'No authenticated email' });
   if (!name || !name.trim()) {
     return res.status(400).json({ error: 'Name is required' });
   }
@@ -21,59 +25,53 @@ exports.setupProfile = async (req, res) => {
   }
 
   try {
-    const userId = req.userId;
+    // Find existing app user by email (Supabase user may not have a row yet)
+    const existing = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
 
-    // Check if user already has a profile set up
-    const [existing] = await pool.execute(
-      'SELECT id, role FROM users WHERE id = ?',
-      [userId]
-    );
+    let userId;
+    const shortName = role === 'owner'
+      ? company_name.trim().toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10)
+      : null;
 
-    if (!existing.length) {
-      return res.status(404).json({ error: 'User not found' });
+    // Generate a unique driver code for new drivers
+    let driverCode = null;
+    if (role === 'driver') {
+      let codeExists = true;
+      while (codeExists) {
+        driverCode = generateDriverCode();
+        const check = await pool.query('SELECT 1 FROM users WHERE driver_code = $1', [driverCode]);
+        codeExists = check.rows.length > 0;
+      }
     }
 
-    // Update user with profile info
-    if (role === 'owner') {
-      const shortName = company_name.trim().toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10);
-      await pool.execute(
-        'UPDATE users SET name = ?, role = ?, phone = ?, company_name = ? WHERE id = ?',
-        [name.trim(), 'owner', phone || null, shortName, userId]
+    if (existing.rows.length) {
+      // Update existing profile
+      userId = existing.rows[0].id;
+      await pool.query(
+        `UPDATE users SET name = $1, role = $2, phone = $3, company_name = $4,
+           driver_code = COALESCE(driver_code, $5), auth_id = $6, updated_at = NOW()
+         WHERE id = $7`,
+        [name.trim(), role, phone || null, shortName, driverCode, authId, userId]
       );
     } else {
-      // For drivers, generate a driver code if needed
-      let driver_code = null;
-      const [driverCheck] = await pool.execute(
-        'SELECT driver_code FROM users WHERE id = ?',
-        [userId]
+      // Create new app user
+      const inserted = await pool.query(
+        `INSERT INTO users (auth_id, name, email, role, phone, company_name, driver_code, is_active)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, TRUE) RETURNING id`,
+        [authId, name.trim(), email, role, phone || null, shortName, driverCode]
       );
-      if (driverCheck.length && !driverCheck[0].driver_code) {
-        let codeExists = true;
-        while (codeExists) {
-          driver_code = generateDriverCode();
-          const [codeCheck] = await pool.execute(
-            'SELECT COUNT(*) as cnt FROM users WHERE driver_code = ?',
-            [driver_code]
-          );
-          codeExists = codeCheck[0]?.cnt > 0;
-        }
-      }
+      userId = inserted.rows[0].id;
+    }
 
-      const updateParams = [name.trim(), 'driver', phone || null];
-      if (driver_code) updateParams.push(driver_code);
-      updateParams.push(userId);
-
-      const sql = 'UPDATE users SET name = ?, role = ?, phone = ?' + (driver_code ? ', driver_code = ?' : '') + ' WHERE id = ?';
-      await pool.execute(sql, updateParams);
-
-      // Create/update driver record
+    // For drivers, create/update the driver record
+    if (role === 'driver') {
       const empId = `DRV-${userId}`;
       try {
-        await pool.execute(
+        await pool.query(
           `INSERT INTO drivers (user_id, employee_id, name, phone, email, license_number, license_expiry, status)
-           VALUES (?, ?, ?, ?, ?, ?, ?, 'active')
+           VALUES ($1, $2, $3, $4, $5, $6, $7, 'active')
            ON CONFLICT (employee_id) DO UPDATE SET name = EXCLUDED.name`,
-          [userId, empId, name.trim(), phone || null, req.userEmail,
+          [userId, empId, name.trim(), phone || null, email,
            license_number || null, license_expiry || null]
         );
       } catch (driverErr) {
@@ -81,11 +79,11 @@ exports.setupProfile = async (req, res) => {
       }
     }
 
-    const [updatedUser] = await pool.execute(
-      'SELECT id, name, email, role, phone, company_name, driver_code, is_active, created_at FROM users WHERE id = ?',
+    const updated = await pool.query(
+      'SELECT id, name, email, role, phone, company_name, driver_code, is_active, created_at FROM users WHERE id = $1',
       [userId]
     );
-    res.json({ user: updatedUser[0], message: 'Profile updated' });
+    res.status(201).json({ user: updated.rows[0], message: 'Profile saved' });
   } catch (err) {
     console.error('Setup profile error:', err);
     res.status(500).json({ error: 'Server error during profile setup' });

@@ -3,11 +3,18 @@ const path    = require('path');
 const { v4: uuidv4 } = require('uuid');
 const { createClient } = require('@supabase/supabase-js');
 
-// Service-role client — backend uploads bypass RLS for storage writes
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_KEY
-);
+// Lazily create the service-role client so a missing env var doesn't crash
+// the server at boot — only uploads will fail until storage is configured.
+let _supabase = null;
+function getSupabase() {
+  if (_supabase) return _supabase;
+  const { SUPABASE_URL, SUPABASE_SERVICE_KEY } = process.env;
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
+    throw new Error('Supabase Storage is not configured (SUPABASE_URL / SUPABASE_SERVICE_KEY missing)');
+  }
+  _supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+  return _supabase;
+}
 
 const FIELD_CONFIG = {
   signature:       { bucket: 'signatures', prefix: 'signatures' },
@@ -38,6 +45,7 @@ async function uploadToStorage(file) {
   const ext    = path.extname(file.originalname).toLowerCase() || '.jpg';
   const key    = `${cfg.prefix}/${uuidv4()}${ext}`;
 
+  const supabase = getSupabase();
   const { error } = await supabase.storage.from(cfg.bucket).upload(key, file.buffer, {
     contentType: file.mimetype,
     upsert: false,

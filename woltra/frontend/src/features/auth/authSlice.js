@@ -1,52 +1,47 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import { auth as insforgeAuth, getToken, clearToken } from '../../services/insforge';
+import { auth as supabaseAuth, getToken, clearToken } from '../../services/supabase';
 import api from '../../services/api';
 
 // ── Sign in with email/password ───────────────────────────────────────────────
 export const login = createAsyncThunk('auth/login', async ({ email, password }, { rejectWithValue }) => {
   try {
-    const { data, error } = await insforgeAuth.signIn(email, password);
-    if (error) {
-      if (error.statusCode === 403) return rejectWithValue('Email not verified. Check your inbox for a verification code.');
-      return rejectWithValue(error.message || 'Invalid email or password');
-    }
-    if (!data) return rejectWithValue('Sign in failed');
+    await supabaseAuth.signIn(email, password);
 
     try {
       const profileRes = await api.get('/auth/profile');
       return profileRes.data.user;
     } catch (profileErr) {
-      // InsForge auth succeeded but no app profile yet — route to profile setup
+      // Supabase auth succeeded but no app profile yet — route to profile setup
       if (profileErr.response?.status === 401) {
         return { needsProfile: true };
       }
       throw profileErr;
     }
   } catch (err) {
-    return rejectWithValue(err.response?.data?.error || err.message || 'Login failed');
+    if (err.message?.toLowerCase().includes('email not confirmed')) {
+      return rejectWithValue('Email not verified. Check your inbox for the confirmation link.');
+    }
+    return rejectWithValue(err.response?.data?.error || err.message || 'Invalid email or password');
   }
 });
 
 // ── Start registration (email/password) ───────────────────────────────────────
 export const register = createAsyncThunk('auth/register', async ({ email, password, name }, { rejectWithValue }) => {
   try {
-    const { data, error } = await insforgeAuth.signUp(email, password, name);
-    if (error) return rejectWithValue(error.message || 'Registration failed');
-    return { requireEmailVerification: data?.requireEmailVerification ?? true, email };
+    const data = await supabaseAuth.signUp(email, password, name);
+    // needsConfirmation = true when Supabase "Confirm email" is enabled
+    return { requireEmailVerification: data.needsConfirmation, email };
   } catch (err) {
     return rejectWithValue(err.response?.data?.error || err.message || 'Registration failed');
   }
 });
 
-// ── Verify OTP + create app profile ──────────────────────────────────────────
+// ── Create app profile (after signup or OAuth) ────────────────────────────────
 export const verifyAndSetupProfile = createAsyncThunk(
   'auth/verifyAndSetupProfile',
-  async ({ email, otp, profileData }, { rejectWithValue }) => {
+  async ({ profileData }, { rejectWithValue }) => {
     try {
-      const { data, error } = await insforgeAuth.verifyEmail(email, otp);
-      if (error) return rejectWithValue(error.message || 'Invalid verification code');
-      if (!getToken()) return rejectWithValue('Verification succeeded but no session was returned');
-
+      if (!getToken()) return rejectWithValue('Please confirm your email, then sign in to finish setup.');
       const profileRes = await api.post('/auth/setup-profile', profileData);
       return profileRes.data.user;
     } catch (err) {
@@ -58,15 +53,19 @@ export const verifyAndSetupProfile = createAsyncThunk(
 // ── OAuth callback — check if profile exists or needs setup ─────────────────────
 export const oauthCallback = createAsyncThunk('auth/oauthCallback', async (_, { rejectWithValue }) => {
   try {
-    // Check if user has a profile in our app (JWT must be in localStorage at this point)
+    // Ensure the Supabase session token is stored before calling our API
+    await supabaseAuth.getCurrentUser();
+    if (!getToken()) return rejectWithValue('OAuth authentication failed');
+
+    // Check if user has a profile in our app
     const profileRes = await api.get('/auth/profile');
     return { user: profileRes.data.user, needsProfile: false };
   } catch (profileErr) {
     if (profileErr.response?.status === 401) {
       // OAuth succeeded, but user needs to create their app profile
-      return { user: null, needsProfile: true, insforgeUser: null };
+      return { user: null, needsProfile: true };
     }
-    return rejectWithValue(profileErr.response?.data?.error || 'Profile fetch failed');
+    return rejectWithValue(profileErr.response?.data?.error || profileErr.message || 'Profile fetch failed');
   }
 });
 
@@ -87,8 +86,8 @@ export const setupOAuthProfile = createAsyncThunk(
 export const loadUser = createAsyncThunk('auth/loadUser', async (_, { rejectWithValue }) => {
   try {
     if (!getToken()) {
-      const { data } = await insforgeAuth.getCurrentUser();
-      if (!data?.user || !getToken()) throw new Error('No session');
+      const user = await supabaseAuth.getCurrentUser();
+      if (!user || !getToken()) throw new Error('No session');
     }
     const profileRes = await api.get('/auth/profile');
     return profileRes.data.user;
@@ -119,7 +118,7 @@ const authSlice = createSlice({
       state.needsProfile = false;
       clearToken();
       localStorage.removeItem('woltra_user');
-      insforgeAuth.signOut().catch(() => {});
+      supabaseAuth.signOut().catch(() => {});
     },
     clearError: (state) => { state.error = null; },
     clearNeedsProfile: (state) => { state.needsProfile = false; },

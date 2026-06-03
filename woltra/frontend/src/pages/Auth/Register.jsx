@@ -3,7 +3,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { Truck, Eye, EyeOff, Sun, Moon, UserPlus, Mail, Lock, User, Phone, Copy, Check, FileText, Calendar, Building2 } from 'lucide-react';
 import { register, verifyAndSetupProfile, clearError } from '../../features/auth/authSlice';
-import { auth as insforgeAuth } from '../../services/insforge';
+import { auth as supabaseAuth } from '../../services/supabase';
 import { useTheme } from '../../contexts/ThemeContext';
 
 export default function Register() {
@@ -44,11 +44,12 @@ export default function Register() {
     const r = await dispatch(register({ name: form.name, email: form.email, password: form.password }));
     if (r.meta.requestStatus === 'fulfilled') {
       if (r.payload.requireEmailVerification) {
+        // Supabase sent a confirmation link — user confirms via email, then lands on /auth-callback
         setPendingEmail(form.email);
       } else {
-        // No verification needed — set up profile immediately
+        // Session already active — set up profile immediately
         const profileData = buildProfileData();
-        const r2 = await dispatch(verifyAndSetupProfile({ email: form.email, otp: '', profileData }));
+        const r2 = await dispatch(verifyAndSetupProfile({ profileData }));
         if (r2.meta.requestStatus === 'fulfilled') {
           setDriverCode(r2.payload?.driver_code || '');
           setRegistered(true);
@@ -67,26 +68,41 @@ export default function Register() {
     }),
   });
 
-  // ── Step 2: Verify OTP + setup profile ───────────────────────────────────
+  // ── Step 2: Verify email OTP code + setup profile ─────────────────────────
   const handleVerifyOtp = async e => {
     e.preventDefault();
     setOtpLoading(true);
-    const profileData = buildProfileData();
-    const r = await dispatch(verifyAndSetupProfile({ email: pendingEmail, otp, profileData }));
-    setOtpLoading(false);
-    if (r.meta.requestStatus === 'fulfilled') {
-      setDriverCode(r.payload?.driver_code || '');
-      setRegistered(true);
+    try {
+      await supabaseAuth.verifyEmailOtp(pendingEmail, otp);
+      const profileData = buildProfileData();
+      const r = await dispatch(verifyAndSetupProfile({ profileData }));
+      if (r.meta.requestStatus === 'fulfilled') {
+        setDriverCode(r.payload?.driver_code || '');
+        setRegistered(true);
+      }
+    } catch (err) {
+      console.error('Verification failed:', err);
+    } finally {
+      setOtpLoading(false);
     }
   };
 
   const handleResend = async () => {
-    await insforgeAuth.resendVerification(pendingEmail);
+    try {
+      await supabaseAuth.resendVerification(pendingEmail);
+    } catch (err) {
+      console.error('Resend failed:', err);
+    }
   };
 
-  const handleOAuth = provider => {
+  const handleOAuth = async provider => {
     localStorage.setItem('woltra_oauth_role', role);
-    insforgeAuth.signInWithOAuth(provider);
+    try {
+      if (provider === 'google') await supabaseAuth.signInWithGoogle();
+      else if (provider === 'github') await supabaseAuth.signInWithGitHub();
+    } catch (err) {
+      console.error('OAuth error:', err);
+    }
   };
 
   const copyCode = () => {
