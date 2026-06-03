@@ -1,12 +1,13 @@
 const multer  = require('multer');
 const path    = require('path');
 const { v4: uuidv4 } = require('uuid');
-const { createAdminClient } = require('@insforge/sdk');
+const { createClient } = require('@supabase/supabase-js');
 
-const insforge = createAdminClient({
-  baseUrl: process.env.INSFORGE_URL,
-  apiKey:  process.env.INSFORGE_API_KEY,
-});
+// Service-role client — backend uploads bypass RLS for storage writes
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_KEY
+);
 
 const FIELD_CONFIG = {
   signature:       { bucket: 'signatures', prefix: 'signatures' },
@@ -37,14 +38,15 @@ async function uploadToStorage(file) {
   const ext    = path.extname(file.originalname).toLowerCase() || '.jpg';
   const key    = `${cfg.prefix}/${uuidv4()}${ext}`;
 
-  const { error } = await insforge.storage.from(cfg.bucket).upload(key, file.buffer, {
+  const { error } = await supabase.storage.from(cfg.bucket).upload(key, file.buffer, {
     contentType: file.mimetype,
+    upsert: false,
   });
 
   if (error) throw new Error(`Storage upload failed: ${error.message}`);
 
-  const base = process.env.INSFORGE_URL;
-  return `${base}/storage/v1/object/public/${cfg.bucket}/${key}`;
+  const { data } = supabase.storage.from(cfg.bucket).getPublicUrl(key);
+  return data.publicUrl;
 }
 
 module.exports = { upload, uploadToStorage };
