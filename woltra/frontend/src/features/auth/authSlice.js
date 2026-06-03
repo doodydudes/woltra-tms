@@ -106,6 +106,7 @@ const authSlice = createSlice({
   name: 'auth',
   initialState: {
     user: savedUser,
+    token: getToken(),
     loading: false,
     error: null,
     initialized: false,
@@ -114,6 +115,7 @@ const authSlice = createSlice({
   reducers: {
     logout: (state) => {
       state.user = null;
+      state.token = null;
       state.error = null;
       state.needsProfile = false;
       clearToken();
@@ -129,6 +131,7 @@ const authSlice = createSlice({
     const setUser = (state, action) => {
       state.loading = false;
       state.user = action.payload;
+      state.token = getToken();
       localStorage.setItem('woltra_user', JSON.stringify(action.payload));
     };
 
@@ -136,6 +139,7 @@ const authSlice = createSlice({
       .addCase(login.pending, pending)
       .addCase(login.fulfilled, (state, action) => {
         state.loading = false;
+        state.token = getToken();
         if (action.payload?.needsProfile) {
           state.needsProfile = true;
           return;
@@ -157,6 +161,7 @@ const authSlice = createSlice({
       .addCase(oauthCallback.fulfilled, (state, action) => {
         state.loading = false;
         state.initialized = true;
+        state.token = getToken();
         if (action.payload.user) {
           state.user = action.payload.user;
           localStorage.setItem('woltra_user', JSON.stringify(action.payload.user));
@@ -175,6 +180,7 @@ const authSlice = createSlice({
       .addCase(setupOAuthProfile.fulfilled, (state, action) => {
         state.loading = false;
         state.initialized = true;
+        state.token = getToken();
         state.user = action.payload;
         localStorage.setItem('woltra_user', JSON.stringify(action.payload));
       })
@@ -186,11 +192,13 @@ const authSlice = createSlice({
 
       .addCase(loadUser.fulfilled, (state, action) => {
         state.user = action.payload;
+        state.token = getToken();
         state.initialized = true;
         localStorage.setItem('woltra_user', JSON.stringify(action.payload));
       })
       .addCase(loadUser.rejected, (state) => {
         state.user = null;
+        state.token = null;
         state.initialized = true;
       });
   },
