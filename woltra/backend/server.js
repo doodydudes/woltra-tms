@@ -81,6 +81,65 @@ async function addColIfMissing(table, column, definition) {
   await addColIfMissing('vehicle_reports', 'driver_progress_notes', 'TEXT');
   await addColIfMissing('vehicle_reports', 'driver_progress_at', 'TIMESTAMP');
 
+  // ── Extended delivery fields used by the delivery controller (INSERT + list view)
+  await addColIfMissing('deliveries', 'location', 'VARCHAR(255)');
+  await addColIfMissing('deliveries', 'reject_return', "VARCHAR(50) DEFAULT 'none'");
+  await addColIfMissing('deliveries', 'bo', 'INTEGER DEFAULT 0');
+  await addColIfMissing('deliveries', 'number_of_bo_boxes', 'INTEGER DEFAULT 0');
+  await addColIfMissing('deliveries', 'backlift', 'INTEGER DEFAULT 0');
+  await addColIfMissing('deliveries', 'customer_signature', 'VARCHAR(500)');
+  await addColIfMissing('deliveries', 'proof_uploaded', 'BOOLEAN DEFAULT FALSE');
+  await addColIfMissing('deliveries', 'notes', 'TEXT');
+  await addColIfMissing('deliveries', 'eta', 'VARCHAR(100)');
+  await addColIfMissing('deliveries', 'actual_start_time', 'TIMESTAMP');
+  await addColIfMissing('deliveries', 'assigned_by', 'INTEGER');
+
+  // Driver + vehicle extended fields
+  await addColIfMissing('drivers',  'notes', 'TEXT');
+  await addColIfMissing('vehicles', 'last_maintenance_date', 'DATE');
+  await addColIfMissing('vehicles', 'next_maintenance_date', 'DATE');
+  await addColIfMissing('vehicles', 'notes', 'TEXT');
+
+  // ── Tables the controllers query but the base schema never created ──────────
+  const createTable = async (sql) => { try { await pool.query(sql); } catch (e) { console.warn('createTable:', e.message); } };
+
+  await createTable(`CREATE TABLE IF NOT EXISTS delivery_tracking (
+    id           SERIAL PRIMARY KEY,
+    delivery_id  INTEGER REFERENCES deliveries(id) ON DELETE CASCADE,
+    status       VARCHAR(30) NOT NULL,
+    notes        TEXT,
+    recorded_by  INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    created_at   TIMESTAMP NOT NULL DEFAULT NOW()
+  )`);
+
+  await createTable(`CREATE TABLE IF NOT EXISTS attendance_records (
+    id         SERIAL PRIMARY KEY,
+    user_id    INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    driver_id  INTEGER REFERENCES drivers(id) ON DELETE CASCADE,
+    date       DATE NOT NULL,
+    check_in   TIMESTAMP,
+    check_out  TIMESTAMP,
+    status     VARCHAR(20) DEFAULT 'present',
+    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+  )`);
+
+  await createTable(`CREATE TABLE IF NOT EXISTS maintenance_records (
+    id                    SERIAL PRIMARY KEY,
+    vehicle_id            INTEGER REFERENCES vehicles(id) ON DELETE CASCADE,
+    maintenance_type      VARCHAR(100),
+    description           TEXT,
+    cost                  DECIMAL(10,2),
+    performed_by          VARCHAR(150),
+    maintenance_date      DATE,
+    next_maintenance_date DATE,
+    status                VARCHAR(20) DEFAULT 'scheduled',
+    created_at            TIMESTAMP NOT NULL DEFAULT NOW()
+  )`);
+
+  await createTable(`CREATE INDEX IF NOT EXISTS idx_delivery_tracking_delivery ON delivery_tracking(delivery_id)`);
+  await createTable(`CREATE INDEX IF NOT EXISTS idx_attendance_driver ON attendance_records(driver_id)`);
+  await createTable(`CREATE INDEX IF NOT EXISTS idx_maintenance_vehicle ON maintenance_records(vehicle_id)`);
+
   // Seed demo accounts if they don't exist
   const demoPassword = await bcrypt.hash('Admin123!', 10);
 
