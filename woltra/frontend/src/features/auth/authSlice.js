@@ -73,7 +73,21 @@ export const oauthCallback = createAsyncThunk('auth/oauthCallback', async (_, { 
 
     // Check if user has a profile in our app
     const profileRes = await api.get('/auth/profile');
-    return { user: profileRes.data.user, needsProfile: false };
+    const user = profileRes.data.user;
+
+    // Enforce that the account's role matches the tab the user signed in from
+    const expectedRole = localStorage.getItem('woltra_oauth_role');
+    if (expectedRole && user.role && user.role !== expectedRole) {
+      await supabaseAuth.signOut().catch(() => {});
+      localStorage.removeItem('woltra_oauth_role');
+      return rejectWithValue(
+        user.role === 'owner'
+          ? 'This account is registered as an Owner. Please use the Owner tab.'
+          : 'This account is registered as a Driver. Please use the Driver tab.'
+      );
+    }
+
+    return { user, needsProfile: false };
   } catch (profileErr) {
     if (profileErr.response?.status === 401) {
       // OAuth succeeded, but user needs to create their app profile
