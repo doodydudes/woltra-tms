@@ -157,16 +157,33 @@ const authSlice = createSlice({
       .addCase(oauthCallback.pending, pending)
       .addCase(oauthCallback.fulfilled, (state, action) => {
         state.loading = false;
+        state.initialized = true;
         if (action.payload.user) {
           state.user = action.payload.user;
           localStorage.setItem('woltra_user', JSON.stringify(action.payload.user));
         }
+        if (action.payload.needsProfile) {
+          state.needsProfile = true;
+        }
       })
-      .addCase(oauthCallback.rejected, rejected)
+      .addCase(oauthCallback.rejected, (state, action) => {
+        state.loading = false;
+        state.initialized = true;
+        state.error = action.payload;
+      })
 
       .addCase(setupOAuthProfile.pending, pending)
-      .addCase(setupOAuthProfile.fulfilled, setUser)
-      .addCase(setupOAuthProfile.rejected, rejected)
+      .addCase(setupOAuthProfile.fulfilled, (state, action) => {
+        state.loading = false;
+        state.initialized = true;
+        state.user = action.payload;
+        localStorage.setItem('woltra_user', JSON.stringify(action.payload));
+      })
+      .addCase(setupOAuthProfile.rejected, (state, action) => {
+        state.loading = false;
+        state.initialized = true;
+        state.error = action.payload;
+      })
 
       .addCase(loadUser.fulfilled, (state, action) => {
         state.user = action.payload;
