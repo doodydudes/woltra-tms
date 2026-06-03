@@ -3,7 +3,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate, Link } from 'react-router-dom';
 import { Truck, Eye, EyeOff, Sun, Moon, LogIn, Building2, Mail, Lock, PackageCheck, Users, BarChart3 } from 'lucide-react';
 import { login, clearError, clearNeedsProfile } from '../../features/auth/authSlice';
-import { auth as insforgeAuth } from '../../services/insforge';
+import { auth as supabaseAuth } from '../../services/supabase';
 import { useTheme } from '../../contexts/ThemeContext';
 
 const HINTS = {
@@ -64,9 +64,17 @@ export default function Login() {
     setErrorKey(k => k + 1);
   };
 
-  const handleOAuth = (provider) => {
+  const handleOAuth = async (provider) => {
     localStorage.setItem('woltra_oauth_role', mode);
-    insforgeAuth.signInWithOAuth(provider);
+    try {
+      if (provider === 'google') {
+        await supabaseAuth.signInWithGoogle();
+      } else if (provider === 'github') {
+        await supabaseAuth.signInWithGitHub();
+      }
+    } catch (err) {
+      console.error('OAuth error:', err);
+    }
   };
 
   return (

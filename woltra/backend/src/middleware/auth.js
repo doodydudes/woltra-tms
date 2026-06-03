@@ -1,30 +1,33 @@
+const jwt = require('jsonwebtoken');
 const pool = require('../config/database');
-const authService = require('../services/authService');
 
-// Verify custom JWT token
+// Verify Supabase JWT token
 const authenticate = async (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
   if (!token) return res.status(401).json({ error: 'Access token required' });
 
-  // Verify JWT token
-  const decoded = authService.verifyJWT(token);
-  if (!decoded) return res.status(401).json({ error: 'Invalid token' });
-
   try {
-    // Get user from database
-    const [rows] = await pool.execute(
-      'SELECT id, name, email, role, is_active FROM users WHERE id = ?',
-      [decoded.user_id]
+    // Decode JWT (Supabase signs it with their secret)
+    const decoded = jwt.decode(token);
+    if (!decoded || !decoded.sub) return res.status(401).json({ error: 'Invalid token' });
+
+    const email = decoded.email;
+
+    // Get user from database by email
+    const result = await pool.query(
+      'SELECT id, name, email, role, is_active FROM users WHERE email = $1',
+      [email]
     );
 
-    if (!rows.length || !rows[0].is_active) {
+    if (!result.rows.length || !result.rows[0].is_active) {
       return res.status(401).json({ error: 'User not found or inactive' });
     }
 
-    req.user = rows[0];
-    req.userId = decoded.user_id;
-    req.userEmail = decoded.email;
+    req.user = result.rows[0];
+    req.userId = result.rows[0].id;
+    req.userEmail = email;
+    req.supabaseId = decoded.sub;
     next();
   } catch (err) {
     console.error('Auth error:', err);
@@ -38,12 +41,17 @@ const verifyToken = async (req, res, next) => {
   const token = authHeader && authHeader.split(' ')[1];
   if (!token) return res.status(401).json({ error: 'Access token required' });
 
-  const decoded = authService.verifyJWT(token);
-  if (!decoded) return res.status(401).json({ error: 'Invalid token' });
+  try {
+    const decoded = jwt.decode(token);
+    if (!decoded || !decoded.sub) return res.status(401).json({ error: 'Invalid token' });
 
-  req.userId = decoded.user_id;
-  req.userEmail = decoded.email;
-  next();
+    req.userId = decoded.sub;
+    req.userEmail = decoded.email;
+    req.supabaseId = decoded.sub;
+    next();
+  } catch (err) {
+    return res.status(401).json({ error: 'Invalid token' });
+  }
 };
 
 module.exports = { authenticate, verifyToken };

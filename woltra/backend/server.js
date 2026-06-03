@@ -17,7 +17,6 @@ const notificationRoutes = require('./src/routes/notificationRoutes');
 const dashboardRoutes = require('./src/routes/dashboardRoutes');
 const tripRateRoutes = require('./src/routes/tripRateRoutes');
 const vehicleReportRoutes = require('./src/routes/vehicleReportRoutes');
-const authService = require('./src/services/authService');
 
 const app = express();
 
@@ -190,47 +189,6 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/salary', tripRateRoutes);
 app.use('/api/vehicle-reports', vehicleReportRoutes);
-
-// Google OAuth callback
-app.post('/api/auth/google/callback', async (req, res) => {
-  try {
-    const { code } = req.body;
-    if (!code) return res.status(400).json({ error: 'Code required' });
-
-    // Exchange code for Google tokens
-    const googleTokens = await authService.exchangeCodeForToken(code);
-
-    // Get Google user info
-    const googleUser = await authService.getGoogleUserInfo(googleTokens.access_token);
-
-    // Check if user exists in database
-    const [rows] = await pool.execute(
-      'SELECT id, role FROM users WHERE email = ?',
-      [googleUser.email]
-    );
-
-    let userId;
-    if (rows.length > 0) {
-      // User exists
-      userId = rows[0].id;
-    } else {
-      // Create new user
-      const [result] = await pool.execute(
-        'INSERT INTO users (email, name, auth_id, is_active) VALUES (?, ?, ?, ?)',
-        [googleUser.email, googleUser.name, googleUser.id, true]
-      );
-      userId = result.insertId;
-    }
-
-    // Issue JWT token
-    const jwtToken = authService.issueJWT(userId, googleUser.email, 'driver');
-
-    res.json({ token: jwtToken, user_id: userId });
-  } catch (error) {
-    console.error('OAuth error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
 
 // Health check — also verifies DB connectivity
 app.get('/api/health', async (req, res) => {
