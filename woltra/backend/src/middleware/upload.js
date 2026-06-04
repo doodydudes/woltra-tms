@@ -12,7 +12,11 @@ function getSupabase() {
   if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
     throw new Error('Supabase Storage is not configured (SUPABASE_URL / SUPABASE_SERVICE_KEY missing)');
   }
-  _supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+  _supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
+    auth: { persistSession: false },
+    realtime: { transport: () => null }, // disable realtime — Node 20 has no native WebSocket
+    global: { headers: { 'x-client-info': 'woltra-backend' } },
+  });
   return _supabase;
 }
 
