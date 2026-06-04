@@ -20,7 +20,7 @@ import DeliveryWorkflow from '../Deliveries/DeliveryWorkflow';
 const BARS = [
   { key: 'Delivered',  color: '#16A34A' },
   { key: 'In Transit', color: '#2563EB' },
-  { key: 'Pending',    color: '#F5B800' },
+  { key: 'Queued',     color: '#F5B800' },
   { key: 'Delayed',    color: '#DC2626' },
 ];
 
@@ -230,7 +230,7 @@ export default function Dashboard() {
     day:          format(new Date(d.delivery_date), 'EEE'),
     Delivered:    parseInt(d.delivered)  || 0,
     'In Transit': parseInt(d.in_transit) || 0,
-    Pending:      parseInt(d.pending)    || 0,
+    Queued:       parseInt(d.pending)    || 0,
     Delayed:      parseInt(d.delayed)    || 0,
   })) || [];
 
