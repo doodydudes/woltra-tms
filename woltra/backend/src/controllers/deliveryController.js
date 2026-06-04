@@ -202,7 +202,7 @@ exports.create = async (req, res) => {
     res.status(201).json({ delivery: newDelivery[0], message: 'Delivery created successfully' });
   } catch (err) {
     console.error('Create delivery error:', err);
-    res.status(500).json({ error: 'Failed to create delivery' });
+    res.status(500).json({ error: `Failed to create delivery: ${err.message}` });
   }
 };
 
