@@ -43,8 +43,8 @@ export const login = createAsyncThunk('auth/login', async ({ email, password, ex
 export const register = createAsyncThunk('auth/register', async ({ email, password, name }, { rejectWithValue }) => {
   try {
     const data = await supabaseAuth.signUp(email, password, name);
-    // needsConfirmation = true when Supabase "Confirm email" is enabled
-    return { requireEmailVerification: data.needsConfirmation, email };
+    // Always skip OTP — profile setup happens immediately after signup
+    return { requireEmailVerification: false, email };
   } catch (err) {
     return rejectWithValue(err.response?.data?.error || err.message || 'Registration failed');
   }

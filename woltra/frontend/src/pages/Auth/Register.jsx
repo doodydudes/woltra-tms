@@ -43,17 +43,12 @@ export default function Register() {
 
     const r = await dispatch(register({ name: form.name, email: form.email, password: form.password }));
     if (r.meta.requestStatus === 'fulfilled') {
-      if (r.payload.requireEmailVerification) {
-        // Supabase sent a confirmation link — user confirms via email, then lands on /auth-callback
-        setPendingEmail(form.email);
-      } else {
-        // Session already active — set up profile immediately
-        const profileData = buildProfileData();
-        const r2 = await dispatch(verifyAndSetupProfile({ profileData }));
-        if (r2.meta.requestStatus === 'fulfilled') {
-          setDriverCode(r2.payload?.driver_code || '');
-          setRegistered(true);
-        }
+      // Always set up profile immediately — no OTP step
+      const profileData = buildProfileData();
+      const r2 = await dispatch(verifyAndSetupProfile({ profileData }));
+      if (r2.meta.requestStatus === 'fulfilled') {
+        setDriverCode(r2.payload?.driver_code || '');
+        setRegistered(true);
       }
     }
   };
