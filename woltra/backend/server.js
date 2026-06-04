@@ -64,6 +64,11 @@ async function addColIfMissing(table, column, definition) {
   try { await pool.query(`ALTER TABLE trip_rates ADD CONSTRAINT trip_rates_province_city_wheel_key UNIQUE (province, city, wheel_count)`); } catch (_) {}
   await addColIfMissing('vehicles', 'wheel_count', 'INTEGER');
 
+  // Fix deliveries status check to include all statuses the code uses
+  try { await pool.query(`ALTER TABLE deliveries DROP CONSTRAINT IF EXISTS deliveries_status_check`); } catch (_) {}
+  try { await pool.query(`ALTER TABLE deliveries ADD CONSTRAINT deliveries_status_check
+    CHECK (status IN ('pending','in_transit','arrived_unloading','delivered','delayed','cancelled','returned'))`); } catch (_) {}
+
   // Make driver columns nullable for self-registered drivers
   try { await pool.query('ALTER TABLE drivers ALTER COLUMN phone DROP NOT NULL'); } catch (_) {}
   try { await pool.query('ALTER TABLE drivers ALTER COLUMN license_number DROP NOT NULL'); } catch (_) {}
