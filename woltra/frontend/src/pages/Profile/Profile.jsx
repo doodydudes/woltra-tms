@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
@@ -132,6 +132,11 @@ export default function Profile() {
 
   const handleLogout = () => { dispatch(logout()); navigate('/login'); };
 
+  const [profileStats, setProfileStats] = useState(null);
+  useEffect(() => {
+    api.get('/dashboard/stats').then(r => setProfileStats(r.data)).catch(() => {});
+  }, []);
+
   const copyDriverCode = () => {
     navigator.clipboard.writeText(user?.driver_code || '');
     setCodeCopied(true);
@@ -221,18 +226,20 @@ export default function Profile() {
   };
   const role = roleConfig[user?.role] || roleConfig.driver;
 
+  const ds = profileStats?.deliveryStats || {};
+  const vs = profileStats?.vehicleStats  || {};
   const kpis = user?.role === 'driver'
     ? [
-        { label: 'Deliveries', value: '24',    sub: 'this month' },
-        { label: 'On-time',    value: '91%',   sub: 'rate'       },
-        { label: 'Miles',      value: '1,240', sub: 'this week'  },
-        { label: 'Rating',     value: '★ 4.8', sub: 'score'      },
+        { label: 'Total Trips', value: ds.total        ?? '—', sub: 'all time'    },
+        { label: 'Delivered',   value: ds.delivered    ?? '—', sub: 'completed'   },
+        { label: 'In Transit',  value: ds.in_transit   ?? '—', sub: 'en route'    },
+        { label: 'Pending',     value: ds.pending      ?? '—', sub: 'queued'      },
       ]
     : [
-        { label: 'Total Loads', value: '148', sub: 'this month' },
-        { label: 'Active',      value: '8',   sub: 'en route'   },
-        { label: 'Fleet',       value: '12',  sub: 'trucks'     },
-        { label: 'On-time',     value: '94%', sub: 'rate'       },
+        { label: 'Total Loads', value: ds.total        ?? '—', sub: 'all time'    },
+        { label: 'Active',      value: ds.in_transit   ?? '—', sub: 'en route'    },
+        { label: 'Fleet',       value: vs.total_vehicles ?? '—', sub: 'trucks'    },
+        { label: 'Delivered',   value: ds.delivered    ?? '—', sub: 'completed'   },
       ];
 
   const toggleNotif = (row, col) =>
