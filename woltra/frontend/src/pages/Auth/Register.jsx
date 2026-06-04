@@ -106,59 +106,6 @@ export default function Register() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  // ── OTP verification screen ───────────────────────────────────────────────
-  if (pendingEmail) {
-    return (
-      <div style={{ minHeight: '100vh', background: 'var(--bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1.5rem' }}>
-        <div style={{ width: '100%', maxWidth: 420, textAlign: 'center' }}>
-          <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 12, padding: '2rem', boxShadow: 'var(--shadow-modal)' }}>
-            <div style={{ width: 56, height: 56, borderRadius: '50%', background: 'rgba(59,130,246,0.12)', border: '2px solid rgba(59,130,246,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.25rem' }}>
-              <Mail size={24} color="var(--blue)" />
-            </div>
-            <h2 style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--text-h)', marginBottom: 6 }}>Check your email</h2>
-            <p style={{ fontSize: '13px', color: 'var(--text-2)', marginBottom: '1.5rem', lineHeight: 1.55 }}>
-              We sent a 6-digit verification code to <strong>{pendingEmail}</strong>
-            </p>
-
-            {error && (
-              <div style={{ marginBottom: '1rem', padding: '9px 12px', background: 'rgba(208,69,69,0.08)', border: '1px solid rgba(208,69,69,0.25)', borderRadius: 7, fontSize: '12.5px', color: 'var(--red)' }}>
-                {error}
-              </div>
-            )}
-
-            <form onSubmit={handleVerifyOtp} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              <input
-                type="text"
-                className="input-field"
-                placeholder="000000"
-                value={otp}
-                onChange={e => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                style={{ textAlign: 'center', fontSize: '1.5rem', letterSpacing: '0.5rem', fontFamily: 'monospace', fontWeight: 700 }}
-                maxLength={6}
-                required
-                autoFocus
-              />
-              <button type="submit" className="btn-primary" disabled={otpLoading || otp.length < 6} style={{ width: '100%', height: 42, fontSize: '14px', borderRadius: 8, gap: 7 }}>
-                {otpLoading
-                  ? <div style={{ width: 16, height: 16, border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 0.65s linear infinite' }} />
-                  : 'Verify & Create Account'}
-              </button>
-            </form>
-
-            <button type="button" onClick={handleResend} style={{ marginTop: '1rem', background: 'none', border: 'none', cursor: 'pointer', fontSize: '12.5px', color: 'var(--blue)', fontFamily: 'inherit' }}>
-              Resend code
-            </button>
-            <div style={{ marginTop: 8 }}>
-              <button type="button" onClick={() => setPendingEmail(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '12px', color: 'var(--text-3)', fontFamily: 'inherit' }}>
-                ← Back
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   // ── Success: owner ────────────────────────────────────────────────────────
   if (registered && role === 'owner') {
     return (
