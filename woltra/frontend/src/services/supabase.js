@@ -93,6 +93,13 @@ export const auth = {
     return session?.user ?? null;
   },
 
+  async resetPassword(email) {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/auth-callback`,
+    });
+    if (error) throw error;
+  },
+
   async signOut() {
     clearToken();
     localStorage.removeItem('woltra_user');
