@@ -24,24 +24,26 @@ exports.getAll = async (req, res) => {
     let where = 'WHERE 1=1';
     const params = [];
 
+    // All columns are qualified with the v. (vehicles) alias because the list
+    // query joins drivers, which ALSO has owner_id/status — unqualified would be ambiguous.
     if (search) {
-      where += ' AND (truck_id LIKE ? OR plate_number LIKE ? OR make LIKE ? OR model LIKE ?)';
+      where += ' AND (v.truck_id LIKE ? OR v.plate_number LIKE ? OR v.make LIKE ? OR v.model LIKE ?)';
       params.push(`%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`);
     }
-    if (status) { where += ' AND status = ?'; params.push(status); }
+    if (status) { where += ' AND v.status = ?'; params.push(status); }
 
     if (req.user.role === 'driver') {
       const [driverRows] = await pool.execute('SELECT id FROM drivers WHERE user_id = ?', [req.user.id]);
       const driverId = driverRows[0]?.id || 0;
-      where += ' AND assigned_driver_id = ?';
+      where += ' AND v.assigned_driver_id = ?';
       params.push(driverId);
     } else {
       // Multi-tenant: an owner only sees vehicles in their own fleet
-      where += ' AND owner_id = ?';
+      where += ' AND v.owner_id = ?';
       params.push(req.user.id);
     }
 
-    const [[{ total }]] = await pool.execute(`SELECT COUNT(*) as total FROM vehicles ${where}`, params);
+    const [[{ total }]] = await pool.execute(`SELECT COUNT(*) as total FROM vehicles v ${where}`, params);
 
     const [rows] = await pool.execute(
       `SELECT v.*,
