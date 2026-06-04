@@ -143,11 +143,16 @@ exports.getReturnReport = async (req, res) => {
 exports.exportCSV = async (req, res) => {
   const { date_from, date_to } = req.query;
 
+  if (!date_from || !date_to) {
+    return res.status(400).json({ error: 'date_from and date_to are required' });
+  }
+
   try {
-    let where = 'WHERE 1=1';
-    const params = [];
-    if (date_from) { where += ' AND d.date >= ?'; params.push(date_from); }
-    if (date_to) { where += ' AND d.date <= ?'; params.push(date_to); }
+    // Scope to this owner's deliveries
+    let where = 'WHERE d.assigned_by = ?';
+    const params = [req.user.id];
+    where += ' AND d.date >= ?'; params.push(date_from);
+    where += ' AND d.date <= ?'; params.push(date_to);
 
     const [rows] = await pool.execute(
       `SELECT d.id, d.date, d.gate_pass_number, d.outlet, d.location, d.status,

@@ -40,6 +40,9 @@ export default function Deliveries() {
   const [selectedId, setSelectedId] = useState(null);
   const [workflowDelivery, setWorkflowDelivery] = useState(null);
   const [showForm, setShowForm]     = useState(false);
+  const [showExport, setShowExport] = useState(false);
+  const [exportFrom, setExportFrom] = useState('');
+  const [exportTo, setExportTo]     = useState('');
 
   const isOwner  = user?.role === 'owner';
   const isDriver = user?.role === 'driver';
@@ -75,11 +78,15 @@ export default function Deliveries() {
   }, [fetchDeliveries]);
 
   const handleExport = async () => {
+    if (!exportFrom || !exportTo) { toast.error('Select a date range first'); return; }
+    if (exportFrom > exportTo)    { toast.error('Start date must be before end date'); return; }
     try {
-      const res = await api.get('/reports/export/csv', { responseType: 'blob' });
+      const qs = new URLSearchParams({ date_from: exportFrom, date_to: exportTo }).toString();
+      const res = await api.get(`/reports/export/csv?${qs}`, { responseType: 'blob' });
       const url = window.URL.createObjectURL(new Blob([res.data]));
       const a = document.createElement('a'); a.href = url;
-      a.download = `deliveries-${format(new Date(), 'dd-MM-yyyy')}.csv`; a.click();
+      a.download = `deliveries-${exportFrom}-to-${exportTo}.csv`; a.click();
+      setShowExport(false);
     } catch { toast.error('Export failed'); }
   };
 
@@ -188,11 +195,43 @@ export default function Deliveries() {
               <RefreshCw size={13} />
             </button>
             {isOwner && (
-              <button onClick={handleExport} className="btn-secondary"
-                style={{ fontSize: 12, height: 36, padding: '0 12px', gap: 5 }}>
-                <Download size={13} />
-                {!isMobile && 'Export'}
-              </button>
+              <div style={{ position: 'relative' }}>
+                <button onClick={() => setShowExport(v => !v)} className="btn-secondary"
+                  style={{ fontSize: 12, height: 36, padding: '0 12px', gap: 5 }}>
+                  <Download size={13} />
+                  {!isMobile && 'Export'}
+                </button>
+                {showExport && (
+                  <div style={{
+                    position: 'absolute', top: 42, right: 0, zIndex: 99,
+                    background: 'var(--bg-card)', border: '1px solid var(--border)',
+                    borderRadius: 10, padding: '14px 16px', boxShadow: 'var(--shadow-modal)',
+                    display: 'flex', flexDirection: 'column', gap: 10, minWidth: 240,
+                  }}>
+                    <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-h)', margin: 0 }}>Export by Date Range</p>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      <label style={{ fontSize: 11, color: 'var(--text-3)', fontWeight: 600 }}>From</label>
+                      <input type="date" className="input-field" value={exportFrom}
+                        onChange={e => setExportFrom(e.target.value)}
+                        style={{ height: 34, fontSize: 13 }} />
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      <label style={{ fontSize: 11, color: 'var(--text-3)', fontWeight: 600 }}>To</label>
+                      <input type="date" className="input-field" value={exportTo}
+                        onChange={e => setExportTo(e.target.value)}
+                        style={{ height: 34, fontSize: 13 }} />
+                    </div>
+                    <div style={{ display: 'flex', gap: 6, marginTop: 2 }}>
+                      <button onClick={() => setShowExport(false)} className="btn-secondary"
+                        style={{ flex: 1, height: 34, fontSize: 12 }}>Cancel</button>
+                      <button onClick={handleExport} className="btn-primary"
+                        style={{ flex: 1, height: 34, fontSize: 12, gap: 5 }}>
+                        <Download size={12} /> Download
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
             )}
             {isDriver && (
               <button onClick={() => setShowForm(true)} className="btn-primary"
