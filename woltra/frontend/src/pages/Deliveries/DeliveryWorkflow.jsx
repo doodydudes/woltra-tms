@@ -185,8 +185,15 @@ export default function DeliveryWorkflow({ delivery, onClose, onSuccess }) {
         photos.forEach(f => formData.append('document_photos', f));
       }
 
+      // Must delete Content-Type so axios lets the browser set the
+      // multipart/form-data boundary automatically for file uploads.
       await api.post(`/deliveries/${delivery.id}/phase`, formData, {
-        headers: { 'Content-Type': undefined }
+        headers: { 'Content-Type': null },
+        transformRequest: [(data, headers) => {
+          delete headers['Content-Type'];
+          delete headers.common?.['Content-Type'];
+          return data;
+        }],
       });
 
       const messages = [

@@ -494,6 +494,6 @@ exports.advancePhase = async (req, res) => {
     res.json({ delivery: updated[0], message: `Phase ${phase} completed successfully` });
   } catch (err) {
     console.error('Advance phase error:', err);
-    res.status(500).json({ error: 'Failed to advance delivery phase' });
+    res.status(500).json({ error: `Failed to advance delivery phase: ${err.message}` });
   }
 };
