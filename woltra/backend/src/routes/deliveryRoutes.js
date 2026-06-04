@@ -17,7 +17,7 @@ router.post('/:id/proof', upload.fields([
   { name: 'signature', maxCount: 1 }
 ]), deliveryController.uploadProof);
 
-router.post('/:id/phase', authorize('driver'), upload.fields([
+router.post('/:id/phase', authorize('driver', 'owner'), upload.fields([
   { name: 'loading_photo', maxCount: 1 },
   { name: 'unloading_photo', maxCount: 1 },
   { name: 'document_photos', maxCount: 10 }
