@@ -83,11 +83,30 @@ export default function Deliveries() {
     try {
       const qs = new URLSearchParams({ date_from: exportFrom, date_to: exportTo }).toString();
       const res = await api.get(`/reports/export/csv?${qs}`, { responseType: 'blob' });
+
+      // Check if the backend returned a JSON error (e.g. 404 no records)
+      const contentType = res.headers['content-type'] || '';
+      if (contentType.includes('application/json')) {
+        const text = await res.data.text();
+        const json = JSON.parse(text);
+        toast.error(json.error || 'No records found for this date range');
+        return;
+      }
+
       const url = window.URL.createObjectURL(new Blob([res.data]));
       const a = document.createElement('a'); a.href = url;
       a.download = `deliveries-${exportFrom}-to-${exportTo}.csv`; a.click();
       setShowExport(false);
-    } catch { toast.error('Export failed'); }
+      toast.success('Export downloaded!');
+    } catch (err) {
+      // axios throws on 4xx — read the blob error body
+      if (err.response?.data instanceof Blob) {
+        const text = await err.response.data.text();
+        try { toast.error(JSON.parse(text).error); } catch { toast.error('No records found for this date range'); }
+      } else {
+        toast.error(err.response?.data?.error || 'Export failed');
+      }
+    }
   };
 
   const handleRowClick = d => {

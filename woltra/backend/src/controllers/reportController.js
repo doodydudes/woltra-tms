@@ -166,6 +166,10 @@ exports.exportCSV = async (req, res) => {
       params
     );
 
+    if (!rows.length) {
+      return res.status(404).json({ error: `No deliveries found from ${date_from} to ${date_to}` });
+    }
+
     const headers = ['ID', 'Date', 'Gate Pass', 'Outlet', 'Location', 'Status',
       'Boxes', 'BO', 'BO Boxes', 'Backlift', 'Reject/Return',
       'Driver', 'Helper', 'Vehicle', 'Completed Time', 'Notes'];
