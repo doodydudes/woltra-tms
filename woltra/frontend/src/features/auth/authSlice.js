@@ -158,6 +158,7 @@ const authSlice = createSlice({
     const rejected = (state, action) => { state.loading = false; state.error = action.payload; };
     const setUser = (state, action) => {
       state.loading = false;
+      state.initialized = true;
       state.user = action.payload;
       state.token = getToken();
       localStorage.setItem('woltra_user', JSON.stringify(action.payload));
@@ -167,6 +168,7 @@ const authSlice = createSlice({
       .addCase(login.pending, pending)
       .addCase(login.fulfilled, (state, action) => {
         state.loading = false;
+        state.initialized = true;
         state.token = getToken();
         if (action.payload?.needsProfile) {
           state.needsProfile = true;
