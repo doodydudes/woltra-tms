@@ -29,12 +29,13 @@ export default function Login() {
   const [forgotLoading, setForgotLoading] = useState(false);
   const dispatch   = useDispatch();
   const navigate   = useNavigate();
-  const { loading, error, user, needsProfile } = useSelector(s => s.auth);
+  const { loading, error, user, token, needsProfile } = useSelector(s => s.auth);
   const { darkMode, toggleDarkMode } = useTheme();
 
   useEffect(() => {
-    if (user) navigate('/dashboard');
-  }, [user, navigate]);
+    // Only redirect when there's a valid token, not just a stale saved user
+    if (user && token) navigate('/dashboard');
+  }, [user, token, navigate]);
 
   useEffect(() => {
     if (needsProfile) {

@@ -17,9 +17,11 @@ api.interceptors.response.use(
   (error) => {
     const isAuthEndpoint = error.config?.url?.startsWith('/auth/');
     if (error.response?.status === 401 && !isAuthEndpoint) {
+      // Full logout — clear BOTH token and saved user, otherwise the login
+      // page restores `user` and immediately navigates back to the dashboard,
+      // creating an infinite /dashboard <-> /login loop.
       clearToken();
-      // Guard against redirect floods (Chrome "Throttling navigation"):
-      // only redirect once, and not if we're already on the login page.
+      localStorage.removeItem('woltra_user');
       if (window.location.pathname !== '/login') {
         window.location.replace('/login');
       }
