@@ -130,6 +130,30 @@ exports.create = async (req, res) => {
   }
 
   try {
+    // Idempotency guard: if the same user just created an identical delivery
+    // (same gate pass + outlet + date) within the last 2 minutes, return it
+    // instead of inserting a duplicate. Protects against lost-response retries.
+    if (gate_pass_number) {
+      const [dupes] = await pool.execute(
+        `SELECT id FROM deliveries
+         WHERE assigned_by = ? AND gate_pass_number = ? AND outlet = ? AND date = ?
+           AND created_at > NOW() - INTERVAL '2 minutes'
+         ORDER BY id DESC LIMIT 1`,
+        [req.user.id, gate_pass_number, outlet, date]
+      );
+      if (dupes.length) {
+        const [existing] = await pool.execute(
+          `SELECT ${deliveryFields} FROM deliveries d
+           LEFT JOIN drivers dr ON d.driver_id = dr.id
+           LEFT JOIN vehicles v ON d.vehicle_id = v.id
+           LEFT JOIN users u ON d.assigned_by = u.id
+           WHERE d.id = ?`,
+          [dupes[0].id]
+        );
+        return res.status(200).json({ delivery: existing[0], message: 'Delivery already created' });
+      }
+    }
+
     let tripRate = null;
     if (delivery_province && delivery_city) {
       let wheelCount = 0;
