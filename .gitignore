@@ -3,17 +3,3 @@ node_modules/
 uploads/
 dist/
 .DS_Store
-
-# AI agent / editor tooling
-.agent
-.agents
-.augment
-.claude
-.cline
-.github/copilot*
-.kilocode
-.qoder
-.qwen
-.roo
-.trae
-.windsurf
