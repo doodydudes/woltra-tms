@@ -3,6 +3,4 @@ node_modules
 uploads
 *.log
 .git
-.insforge
 migrations
-.env.compute

@@ -3,7 +3,7 @@ const router = express.Router();
 const authController = require('../controllers/authController');
 const { authenticate, verifyToken } = require('../middleware/auth');
 
-// Profile setup after InsForge signup (JWT only — no app user row required yet)
+// Profile setup after Supabase signup (JWT only — no app user row required yet)
 router.post('/setup-profile', verifyToken, authController.setupProfile);
 
 // App profile management (requires existing public.users row)

@@ -161,7 +161,7 @@ CREATE TABLE routes (
 -- Indexes — auth lookup & query hot paths
 -- =============================================================
 
--- Auth: InsForge JWT sub (UUID) -> app user row — called on every request
+-- Auth: Supabase JWT sub (UUID) -> app user row — called on every request
 CREATE UNIQUE INDEX idx_users_auth_id ON users(auth_id);
 -- Email uniqueness + login lookup
 CREATE UNIQUE INDEX idx_users_email ON users(email);
