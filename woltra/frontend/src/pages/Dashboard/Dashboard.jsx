@@ -4,7 +4,7 @@ import { useSelector } from 'react-redux';
 import {
   Package, Truck, Users, Clock, CheckCircle,
   Key, ArrowRight, TrendingUp, TrendingDown,
-  ChevronRight, BarChart2, MapPin,
+  ChevronRight, BarChart2, MapPin, XCircle,
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -22,6 +22,7 @@ const BARS = [
   { key: 'In Transit', color: '#2563EB' },
   { key: 'Queued',     color: '#F5B800' },
   { key: 'Delayed',    color: '#DC2626' },
+  { key: 'Cancelled',  color: '#6B7280' },
 ];
 
 const STATUS_ACCENT = {
@@ -232,6 +233,7 @@ export default function Dashboard() {
     'In Transit': parseInt(d.in_transit) || 0,
     Queued:       parseInt(d.pending)    || 0,
     Delayed:      parseInt(d.delayed)    || 0,
+    Cancelled:    parseInt(d.cancelled)  || 0,
   })) || [];
 
   const ds        = stats?.deliveryStats || {};
@@ -241,6 +243,7 @@ export default function Dashboard() {
     { label: 'Total Trips',    value: ds.total,                             icon: Package,     color: '#F5B800' },
     { label: 'In Transit',     value: ds.in_transit,                        icon: Truck,       color: '#2563EB', sub: `${ds.delayed || 0} delayed` },
     { label: 'Delivered',      value: ds.delivered,                         icon: CheckCircle, color: '#16A34A' },
+    { label: 'Cancelled',      value: ds.cancelled,                         icon: XCircle,     color: '#6B7280' },
     { label: 'Active Drivers', value: stats?.driverStats?.active_drivers,   icon: Users,       color: '#7C3AED' },
   ];
 
@@ -249,6 +252,7 @@ export default function Dashboard() {
     { label: 'Delivered',   value: ds.delivered,   icon: CheckCircle, color: '#16A34A' },
     { label: 'In Transit',  value: ds.in_transit,  icon: Truck,       color: '#2563EB' },
     { label: 'Queued',      value: ds.pending,     icon: Clock,       color: '#D97706' },
+    { label: 'Cancelled',   value: ds.cancelled,   icon: XCircle,     color: '#6B7280' },
   ];
 
   const kpis = isOwner ? ownerKPIs : driverKPIs;

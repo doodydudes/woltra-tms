@@ -49,7 +49,8 @@ exports.getStats = async (req, res) => {
           COUNT(*)::int                                       AS total,
           COUNT(*) FILTER (WHERE status = 'delivered')::int  AS delivered,
           COUNT(*) FILTER (WHERE status = 'pending')::int    AS pending,
-          COUNT(*) FILTER (WHERE status = 'delayed')::int    AS delayed
+          COUNT(*) FILTER (WHERE status = 'delayed')::int    AS delayed,
+          COUNT(*) FILTER (WHERE status = 'cancelled')::int  AS cancelled
         FROM deliveries
         WHERE date >= ? AND driver_id = ?
         GROUP BY DATE(date)
@@ -119,7 +120,8 @@ exports.getStats = async (req, res) => {
         COUNT(*)::int                                         AS total,
         COUNT(*) FILTER (WHERE d.status = 'delivered')::int  AS delivered,
         COUNT(*) FILTER (WHERE d.status = 'pending')::int    AS pending,
-        COUNT(*) FILTER (WHERE d.status = 'delayed')::int    AS delayed
+        COUNT(*) FILTER (WHERE d.status = 'delayed')::int    AS delayed,
+        COUNT(*) FILTER (WHERE d.status = 'cancelled')::int  AS cancelled
       FROM deliveries d LEFT JOIN drivers dr ON d.driver_id = dr.id
       WHERE d.date >= ? AND (d.assigned_by = ? OR dr.owner_id = ?)
       GROUP BY DATE(d.date)
