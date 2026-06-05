@@ -30,11 +30,12 @@ const FIELD_CONFIG = {
 };
 
 const fileFilter = (req, file, cb) => {
-  const allowed = /jpeg|jpg|png|gif|webp/;
-  if (allowed.test(path.extname(file.originalname).toLowerCase()) && allowed.test(file.mimetype)) {
+  // Accept any image — phone camera captures and pasted/blob images often have
+  // no file extension, so checking the mimetype is the reliable approach.
+  if (file.mimetype && file.mimetype.startsWith('image/')) {
     cb(null, true);
   } else {
-    cb(new Error('Only image files are allowed (jpeg, jpg, png, gif, webp)'));
+    cb(new Error('Only image files are allowed'));
   }
 };
 
@@ -44,9 +45,14 @@ const upload = multer({
   limits: { fileSize: parseInt(process.env.MAX_FILE_SIZE) || 5 * 1024 * 1024 },
 });
 
+const MIME_EXT = {
+  'image/jpeg': '.jpg', 'image/jpg': '.jpg', 'image/png': '.png',
+  'image/gif': '.gif', 'image/webp': '.webp', 'image/heic': '.heic',
+};
+
 async function uploadToStorage(file) {
   const cfg    = FIELD_CONFIG[file.fieldname] || { bucket: 'photos', prefix: 'misc' };
-  const ext    = path.extname(file.originalname).toLowerCase() || '.jpg';
+  const ext    = path.extname(file.originalname).toLowerCase() || MIME_EXT[file.mimetype] || '.jpg';
   const key    = `${cfg.prefix}/${uuidv4()}${ext}`;
 
   const supabase = getSupabase();
