@@ -7,6 +7,9 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
+      // Self-destroying SW: unregisters any previously installed service worker
+      // and clears its caches, so users always get fresh code (no stale bundles).
+      selfDestroying: true,
       includeAssets: ['logo-badge.svg', 'apple-touch-icon.png', 'favicon-32x32.png'],
       manifest: {
         name: 'WOLTRA',
