@@ -102,6 +102,10 @@ export const setupOAuthProfile = createAsyncThunk(
   'auth/setupOAuthProfile',
   async (profileData, { rejectWithValue }) => {
     try {
+      // Ensure the Supabase session token is persisted before the API call,
+      // otherwise the request has no auth header → "Access token required".
+      if (!getToken()) await supabaseAuth.getCurrentUser();
+      if (!getToken()) return rejectWithValue('Session expired — please sign in again.');
       const profileRes = await api.post('/auth/setup-profile', profileData);
       return profileRes.data.user;
     } catch (err) {
