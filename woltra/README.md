@@ -1,182 +1,111 @@
-# TruckMS - Trucking Management System
+# WOLTRA — Trucking Management System
 
-A complete production-ready web-based Trucking Management System with React frontend and Node.js/MySQL backend.
+A web-based Trucking Management System for small fleets, with a React frontend and a Node.js/Express backend on Supabase (PostgreSQL + Auth + Storage). Built mobile-first as an installable PWA.
 
 ## Tech Stack
 
-- **Frontend**: React 18, Vite, Tailwind CSS, Redux Toolkit, React Router, Recharts
-- **Backend**: Node.js, Express.js, MySQL2
-- **Auth**: JWT, bcryptjs, Role-Based Access Control
-- **PWA**: Offline-ready via Vite PWA plugin
-
-## Quick Start
-
-### Prerequisites
-- Node.js 18+
-- MySQL 8.0+
-
-### 1. Database Setup
-
-```bash
-cd backend
-cp .env.example .env
-# Edit .env with your MySQL credentials
-npm install
-npm run db:setup
-```
-
-### 2. Start Backend
-
-```bash
-cd backend
-npm run dev
-# API running on http://localhost:5000
-```
-
-### 3. Start Frontend
-
-```bash
-cd frontend
-npm install
-npm run dev
-# App running on http://localhost:5173
-```
-
-## Default Accounts (Password: `Admin123!`)
-
-| Role       | Email                      |
-|------------|----------------------------|
-| Admin      | admin@trucking.com         |
-| Dispatcher | dispatcher@trucking.com    |
-| Driver     | mike@trucking.com          |
-| Helper     | tom@trucking.com           |
+- **Frontend**: React 18, Vite, Redux Toolkit, React Router, Recharts, Tailwind CSS
+- **Backend**: Node.js, Express.js, PostgreSQL (via the `pg` driver)
+- **Database & Storage**: Supabase (PostgreSQL, file storage buckets)
+- **Auth**: Supabase Authentication — email/password + Google & GitHub OAuth, role-based access (Owner / Driver)
+- **PWA**: Installable, mobile-first UI via the Vite PWA plugin
+- **Deployment**: Frontend on Vercel, backend on Render, data on Supabase
 
 ## Features
 
+### Multi-tenant Fleets
+- Each Owner manages their own isolated fleet — drivers, vehicles, and deliveries are scoped per owner
+- Drivers self-register and receive a **driver code**; owners add them by entering that code
+- Owners issue **vehicle claim codes** so drivers can claim their assigned truck
+
 ### Dashboard
-- Real-time delivery statistics
-- Weekly delivery trend charts
-- Fleet status overview
-- Top driver performance
-- Recent activity feed
-
-### Delivery Management
-- Full CRUD operations
-- Gate pass tracking
-- BO (Back Order) tracking
-- Backlift management
-- Proof of delivery (photo + signature upload)
-- Delivery timeline/tracking
-- Status updates with history
-- CSV export
-
-### Driver Management
-- Driver profiles with performance stats
-- Attendance check-in/check-out
-- Delivery history per driver
-- License expiry tracking
-
-### Helper Management
-- Helper roster management
-- Assignment to deliveries
-
-### Vehicle Management
-- Fleet status tracking
-- Fuel log management
-- Maintenance records
-- Mileage tracking
-
-### Reports
-- Delivery reports (daily/weekly/monthly)
-- Driver performance reports
-- Back Order (BO) reports
-- Return/reject reports
-- CSV export
-
-### Notifications
-- Real-time notification system
-- Delivery assignment alerts
-- Maintenance reminders
-- Unread count badge
-
-## API Endpoints
-
-### Auth
-- `POST /api/auth/login`
-- `GET /api/auth/profile`
-- `PUT /api/auth/profile`
-- `PUT /api/auth/change-password`
+- Delivery statistics (total, in transit, delivered, queued, cancelled)
+- Weekly delivery trend chart
+- Fleet status overview and recent activity
 
 ### Deliveries
-- `GET /api/deliveries` — paginated, searchable, filterable
-- `POST /api/deliveries`
-- `GET /api/deliveries/:id` — with tracking timeline
-- `PUT /api/deliveries/:id`
-- `DELETE /api/deliveries/:id`
-- `POST /api/deliveries/:id/proof` — upload photo/signature
+- Single-form creation (gate pass, date, outlet, destination, driver, helpers)
+- 4-phase workflow with photo proof at each stage:
+  1. Loading → In Transit
+  2. Arrival → Arrived & Unloading
+  3. Unloading proof + customer signature
+  4. Documents → Delivered
+- CSV export by date range
 
-### Drivers
-- `GET /api/drivers`
-- `POST /api/drivers`
-- `GET /api/drivers/:id` — with stats and attendance
-- `PUT /api/drivers/:id`
-- `DELETE /api/drivers/:id`
-- `POST /api/drivers/:id/checkin`
-- `POST /api/drivers/:id/checkout`
+### Drivers & Vehicles
+- Driver profiles, attendance, and per-driver delivery history
+- Fleet management with maintenance records
 
-### Vehicles
-- `GET /api/vehicles`
-- `POST /api/vehicles`
-- `GET /api/vehicles/:id`
-- `PUT /api/vehicles/:id`
-- `DELETE /api/vehicles/:id`
-- `POST /api/vehicles/:id/fuel`
-- `POST /api/vehicles/:id/maintenance`
+### Salary / Payroll
+- Per-location trip rates (province / city / wheel count)
+- Driver earnings and owner payroll approval
 
-### Reports
-- `GET /api/reports/deliveries`
-- `GET /api/reports/drivers`
-- `GET /api/reports/bo`
-- `GET /api/reports/returns`
-- `GET /api/reports/export/csv`
+## Quick Start (local development)
 
-### Dashboard
-- `GET /api/dashboard/stats`
+### Prerequisites
+- Node.js 18+
+- A Supabase project (PostgreSQL connection string + service key, storage buckets: `photos`, `signatures`, `documents`)
 
-## User Roles & Permissions
+### 1. Backend
 
-| Feature            | Admin | Dispatcher | Driver | Helper |
-|--------------------|-------|------------|--------|--------|
-| Dashboard          | ✓     | ✓          | ✓      | ✓      |
-| View Deliveries    | ✓     | ✓          | ✓      | ✓      |
-| Create Deliveries  | ✓     | ✓          | ✗      | ✗      |
-| Edit Deliveries    | ✓     | ✓          | ✓*     | ✗      |
-| Delete Deliveries  | ✓     | ✗          | ✗      | ✗      |
-| Manage Drivers     | ✓     | ✓          | ✗      | ✗      |
-| Manage Vehicles    | ✓     | Edit only  | ✗      | ✗      |
-| Reports            | ✓     | ✓          | ✗      | ✗      |
-| User Management    | ✓     | ✗          | ✗      | ✗      |
+```bash
+cd woltra/backend
+cp .env.example .env   # set DATABASE_URL, SUPABASE_URL, SUPABASE_SERVICE_KEY
+npm install
+npm run dev            # API on http://localhost:5000
+```
 
-*Drivers can update status of their own deliveries
+The schema is applied automatically on startup (idempotent migrations in `server.js`).
+
+### 2. Frontend
+
+```bash
+cd woltra/frontend
+cp .env.example .env   # set VITE_API_URL, VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY
+npm install
+npm run dev            # App on http://localhost:5173
+```
+
+Or run both together from the repo root: `npm start`.
+
+## API Overview
+
+| Group | Endpoints |
+|-------|-----------|
+| Auth | `POST /api/auth/setup-profile`, `GET/PUT /api/auth/profile` |
+| Deliveries | `GET/POST /api/deliveries`, `GET/PUT/DELETE /api/deliveries/:id`, `POST /api/deliveries/:id/phase` |
+| Drivers | `GET/POST /api/drivers`, `GET/PUT/DELETE /api/drivers/:id`, `GET /api/drivers/lookup` |
+| Vehicles | `GET/POST /api/vehicles`, `GET/PUT/DELETE /api/vehicles/:id`, `POST /api/vehicles/:id/maintenance` |
+| Salary | `GET/POST/DELETE /api/salary`, `GET /api/salary/payroll`, `POST /api/salary/approve/:id` |
+| Reports | `GET /api/reports/export/csv` |
+| Dashboard | `GET /api/dashboard/stats` |
+
+## Roles
+
+| Capability | Owner | Driver |
+|------------|-------|--------|
+| Dashboard | ✓ | ✓ |
+| Create / run deliveries | ✓ | ✓ |
+| Manage drivers & vehicles | ✓ | ✗ |
+| Salary rates & payroll approval | ✓ | view own earnings |
 
 ## Project Structure
 
 ```
-trucking-management/
+woltra/
 ├── backend/
 │   ├── src/
-│   │   ├── config/       # Database connection
+│   │   ├── config/       # Supabase PostgreSQL connection
 │   │   ├── controllers/  # Route handlers
-│   │   ├── middleware/   # Auth, roles, upload
+│   │   ├── middleware/   # Auth, roles, file upload (Supabase Storage)
 │   │   └── routes/       # API routes
-│   ├── database/         # SQL schema + seed
-│   ├── uploads/          # Delivery photos/signatures
-│   └── server.js
+│   ├── migrations/       # SQL schema
+│   └── server.js         # App + startup migrations
 └── frontend/
     └── src/
-        ├── components/   # Reusable UI components
+        ├── components/   # Reusable UI
         ├── features/     # Redux slices
         ├── pages/        # Route pages
-        ├── services/     # API client
+        ├── services/     # API client + Supabase client
         └── contexts/     # Theme context
 ```
