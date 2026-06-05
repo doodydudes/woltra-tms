@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../services/api';
+import { copyToClipboard } from '../../utils/clipboard';
 import { useTheme } from '../../contexts/ThemeContext';
 import { loadUser, logout } from '../../features/auth/authSlice';
 
@@ -137,10 +138,14 @@ export default function Profile() {
     api.get('/dashboard/stats').then(r => setProfileStats(r.data)).catch(() => {});
   }, []);
 
-  const copyDriverCode = () => {
-    navigator.clipboard.writeText(user?.driver_code || '');
-    setCodeCopied(true);
-    setTimeout(() => setCodeCopied(false), 2000);
+  const copyDriverCode = async () => {
+    const ok = await copyToClipboard(user?.driver_code || user?.company_name || '');
+    if (ok) {
+      setCodeCopied(true);
+      setTimeout(() => setCodeCopied(false), 2000);
+    } else {
+      toast.error('Could not copy — long-press the code to copy manually');
+    }
   };
 
   const [savingProfile, setSavingProfile] = useState(false);

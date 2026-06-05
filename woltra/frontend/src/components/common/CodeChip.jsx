@@ -1,16 +1,17 @@
 import { useState } from 'react';
 import { Copy, Check } from 'lucide-react';
+import { copyToClipboard } from '../../utils/clipboard';
 
 export default function CodeChip({ value, copyable = false, size = 'md', color = 'blue' }) {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = async e => {
     e.stopPropagation();
-    try {
-      await navigator.clipboard.writeText(value);
+    const ok = await copyToClipboard(value);
+    if (ok) {
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
-    } catch {}
+    }
   };
 
   const sizes = {

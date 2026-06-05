@@ -4,6 +4,7 @@ import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { Truck, Eye, EyeOff, Sun, Moon, UserPlus, Mail, Lock, User, Phone, Copy, Check, FileText, Calendar, Building2 } from 'lucide-react';
 import { register, verifyAndSetupProfile, clearError } from '../../features/auth/authSlice';
 import { auth as supabaseAuth } from '../../services/supabase';
+import { copyToClipboard } from '../../utils/clipboard';
 import { useTheme } from '../../contexts/ThemeContext';
 
 export default function Register() {
@@ -100,10 +101,12 @@ export default function Register() {
     }
   };
 
-  const copyCode = () => {
-    navigator.clipboard.writeText(driverCode);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  const copyCode = async () => {
+    const ok = await copyToClipboard(driverCode);
+    if (ok) {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
   };
 
   // ── Success: owner ────────────────────────────────────────────────────────

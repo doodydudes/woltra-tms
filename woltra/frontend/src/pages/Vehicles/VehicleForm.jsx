@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Copy, Check, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../services/api';
+import { copyToClipboard } from '../../utils/clipboard';
 import Modal from '../../components/common/Modal';
 
 export default function VehicleForm({ vehicle, onClose, onSuccess }) {
@@ -29,11 +30,14 @@ export default function VehicleForm({ vehicle, onClose, onSuccess }) {
     }
   });
 
-  const copyCode = (code) => {
-    navigator.clipboard.writeText(code).then(() => {
+  const copyCode = async (code) => {
+    const ok = await copyToClipboard(code);
+    if (ok) {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    });
+    } else {
+      toast.error('Could not copy automatically');
+    }
   };
 
   const handleDelete = async () => {
