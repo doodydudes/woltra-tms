@@ -5,8 +5,7 @@ uploads/
 dist/
 .DS_Store
 
-# InsForge & AI agent skills
-.insforge
+# AI agent / editor tooling
 .agent
 .agents
 .augment
