@@ -74,25 +74,28 @@ exports.getStats = async (req, res) => {
     // Owner: stats scoped to this owner's own fleet (owner_id / assigned_by)
     const ownerId = req.user.id;
 
+    // Owner's deliveries = ones they created OR ones by drivers in their fleet
     const [[deliveryStats]] = await pool.execute(`
       SELECT
-        COUNT(*)::int                                         AS total,
-        COUNT(*) FILTER (WHERE status = 'pending')::int       AS pending,
-        COUNT(*) FILTER (WHERE status = 'in_transit')::int    AS in_transit,
-        COUNT(*) FILTER (WHERE status = 'delivered')::int     AS delivered,
-        COUNT(*) FILTER (WHERE status = 'delayed')::int       AS delayed,
-        COUNT(*) FILTER (WHERE status = 'cancelled')::int     AS cancelled,
-        COUNT(*) FILTER (WHERE status = 'returned')::int      AS returned
-      FROM deliveries WHERE assigned_by = ?
-    `, [ownerId]);
+        COUNT(*)::int                                           AS total,
+        COUNT(*) FILTER (WHERE d.status = 'pending')::int       AS pending,
+        COUNT(*) FILTER (WHERE d.status = 'in_transit')::int    AS in_transit,
+        COUNT(*) FILTER (WHERE d.status = 'delivered')::int     AS delivered,
+        COUNT(*) FILTER (WHERE d.status = 'delayed')::int       AS delayed,
+        COUNT(*) FILTER (WHERE d.status = 'cancelled')::int     AS cancelled,
+        COUNT(*) FILTER (WHERE d.status = 'returned')::int      AS returned
+      FROM deliveries d LEFT JOIN drivers dr ON d.driver_id = dr.id
+      WHERE (d.assigned_by = ? OR dr.owner_id = ?)
+    `, [ownerId, ownerId]);
 
     const [[todayStats]] = await pool.execute(`
       SELECT
-        COUNT(*)::int                                         AS total_today,
-        COUNT(*) FILTER (WHERE status = 'delivered')::int     AS delivered_today,
-        COUNT(*) FILTER (WHERE status = 'pending')::int       AS pending_today
-      FROM deliveries WHERE date = ? AND assigned_by = ?
-    `, [today, ownerId]);
+        COUNT(*)::int                                           AS total_today,
+        COUNT(*) FILTER (WHERE d.status = 'delivered')::int     AS delivered_today,
+        COUNT(*) FILTER (WHERE d.status = 'pending')::int       AS pending_today
+      FROM deliveries d LEFT JOIN drivers dr ON d.driver_id = dr.id
+      WHERE d.date = ? AND (d.assigned_by = ? OR dr.owner_id = ?)
+    `, [today, ownerId, ownerId]);
 
     const [[driverStats]] = await pool.execute(`
       SELECT
@@ -112,16 +115,16 @@ exports.getStats = async (req, res) => {
 
     const [weeklyData] = await pool.execute(`
       SELECT
-        DATE(date)                                          AS delivery_date,
-        COUNT(*)::int                                       AS total,
-        COUNT(*) FILTER (WHERE status = 'delivered')::int  AS delivered,
-        COUNT(*) FILTER (WHERE status = 'pending')::int    AS pending,
-        COUNT(*) FILTER (WHERE status = 'delayed')::int    AS delayed
-      FROM deliveries
-      WHERE date >= ? AND assigned_by = ?
-      GROUP BY DATE(date)
+        DATE(d.date)                                          AS delivery_date,
+        COUNT(*)::int                                         AS total,
+        COUNT(*) FILTER (WHERE d.status = 'delivered')::int  AS delivered,
+        COUNT(*) FILTER (WHERE d.status = 'pending')::int    AS pending,
+        COUNT(*) FILTER (WHERE d.status = 'delayed')::int    AS delayed
+      FROM deliveries d LEFT JOIN drivers dr ON d.driver_id = dr.id
+      WHERE d.date >= ? AND (d.assigned_by = ? OR dr.owner_id = ?)
+      GROUP BY DATE(d.date)
       ORDER BY delivery_date ASC
-    `, [weekAgo, ownerId]);
+    `, [weekAgo, ownerId, ownerId]);
 
     const [recentActivity] = await pool.execute(`
       SELECT
@@ -130,10 +133,10 @@ exports.getStats = async (req, res) => {
         d.updated_at
       FROM deliveries d
       LEFT JOIN drivers dr ON d.driver_id = dr.id
-      WHERE d.assigned_by = ?
+      WHERE (d.assigned_by = ? OR dr.owner_id = ?)
       ORDER BY d.updated_at DESC
       LIMIT 10
-    `, [ownerId]);
+    `, [ownerId, ownerId]);
 
     const [topDrivers] = await pool.execute(`
       SELECT

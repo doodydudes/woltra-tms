@@ -47,9 +47,9 @@ exports.getAll = async (req, res) => {
       where += ' AND d.driver_id = ?';
       params.push(myDriverId);
     } else {
-      // Multi-tenant: an owner only sees deliveries they created
-      where += ' AND d.assigned_by = ?';
-      params.push(req.user.id);
+      // Owner sees deliveries they created OR any delivery by a driver in their fleet
+      where += ' AND (d.assigned_by = ? OR dr.owner_id = ?)';
+      params.push(req.user.id, req.user.id);
     }
 
     const [countResult] = await pool.execute(
@@ -154,6 +154,14 @@ exports.create = async (req, res) => {
       }
     }
 
+    // A driver creating their own delivery is always the assigned driver, so
+    // resolve their driver_id (otherwise the delivery wouldn't show in My Loads).
+    let effectiveDriverId = driver_id || null;
+    if (req.user.role === 'driver') {
+      const [dr] = await pool.execute('SELECT id FROM drivers WHERE user_id = ?', [req.user.id]);
+      if (dr.length) effectiveDriverId = dr[0].id;
+    }
+
     let tripRate = null;
     if (delivery_province && delivery_city) {
       let wheelCount = 0;
@@ -182,7 +190,7 @@ exports.create = async (req, res) => {
         date, gate_pass_number || null, outlet, location || null,
         parseInt(number_of_boxes) || 0,
         bo ? 1 : 0, parseInt(number_of_bo_boxes) || 0, backlift ? 1 : 0,
-        driver_id || null, replacement_driver_name || null, helper_name || null,
+        effectiveDriverId, replacement_driver_name || null, helper_name || null,
         vehicle_id || null, status || 'pending', notes || null,
         eta || null, reject_return || 'none',
         delivery_province || null, delivery_city || null, tripRate, req.user.id
