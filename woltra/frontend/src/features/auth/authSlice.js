@@ -64,36 +64,52 @@ export const verifyAndSetupProfile = createAsyncThunk(
   }
 );
 
-// ── OAuth callback — check if profile exists or needs setup ─────────────────────
+// ── OAuth callback — check if profile exists, else auto-create it ───────────────
 export const oauthCallback = createAsyncThunk('auth/oauthCallback', async (_, { rejectWithValue }) => {
   try {
     // Ensure the Supabase session token is stored before calling our API
-    await supabaseAuth.getCurrentUser();
+    const sbUser = await supabaseAuth.getCurrentUser();
     if (!getToken()) return rejectWithValue('OAuth authentication failed');
 
-    // Check if user has a profile in our app
-    const profileRes = await api.get('/auth/profile');
-    const user = profileRes.data.user;
+    // Check if user already has a profile in our app
+    try {
+      const profileRes = await api.get('/auth/profile');
+      const user = profileRes.data.user;
 
-    // Enforce that the account's role matches the tab the user signed in from
-    const expectedRole = localStorage.getItem('woltra_oauth_role');
-    if (expectedRole && user.role && user.role !== expectedRole) {
-      await supabaseAuth.signOut().catch(() => {});
+      // Enforce that the account's role matches the tab the user signed in from
+      const expectedRole = localStorage.getItem('woltra_oauth_role');
+      if (expectedRole && user.role && user.role !== expectedRole) {
+        await supabaseAuth.signOut().catch(() => {});
+        localStorage.removeItem('woltra_oauth_role');
+        return rejectWithValue(
+          user.role === 'owner'
+            ? 'This account is registered as an Owner. Please use the Owner tab.'
+            : 'This account is registered as a Driver. Please use the Driver tab.'
+        );
+      }
+
       localStorage.removeItem('woltra_oauth_role');
-      return rejectWithValue(
-        user.role === 'owner'
-          ? 'This account is registered as an Owner. Please use the Owner tab.'
-          : 'This account is registered as a Driver. Please use the Driver tab.'
-      );
-    }
+      return { user, needsProfile: false };
+    } catch (profileErr) {
+      if (profileErr.response?.status !== 401) throw profileErr;
 
-    return { user, needsProfile: false };
-  } catch (profileErr) {
-    if (profileErr.response?.status === 401) {
-      // OAuth succeeded, but user needs to create their app profile
-      return { user: null, needsProfile: true };
+      // No profile yet — auto-create one from the OAuth account so the user
+      // never has to fill the manual "Complete Your Profile" form.
+      const role = localStorage.getItem('woltra_oauth_role') || 'driver';
+      const meta = sbUser?.user_metadata || {};
+      const name = meta.name || meta.full_name || sbUser?.email?.split('@')[0] || 'User';
+      const profileData = { role, name };
+      if (role === 'owner') {
+        const base = (name || sbUser?.email || 'FLEET')
+          .toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6) || 'FLEET';
+        profileData.company_name = base;
+      }
+      const created = await api.post('/auth/setup-profile', profileData);
+      localStorage.removeItem('woltra_oauth_role');
+      return { user: created.data.user, needsProfile: false };
     }
-    return rejectWithValue(profileErr.response?.data?.error || profileErr.message || 'Profile fetch failed');
+  } catch (err) {
+    return rejectWithValue(err.response?.data?.error || err.message || 'Profile setup failed');
   }
 });
 
